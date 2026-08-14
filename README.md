@@ -71,7 +71,7 @@ because it is planned.
 | Module | What it does | State |
 |---|---|---|
 | `src/helix_grounding/` | The verification library — extractors, ground truth, retry loop | Working, 53 tests, two domains |
-| `src/helix_bom/` | BOM review agent: budget, power, physical fit, lead-time checks | Working, 14 sandbox suites |
+| `src/helix_bom/` | BOM review: CSV ingest, deterministic checks, `helix-bom` CLI | Working, 57 tests + 14 sandbox suites |
 | `src/helix_llm/` | Backend-agnostic model client (local Ollama by default, Anthropic optional) | Working, local path unverified end-to-end on this machine |
 | `src/helix_api/` | FastAPI orchestrator with signature auth and audit logging | Skeleton — routes work, not deployed |
 | `migrations/` | PostgreSQL schema (audit trail, pgvector memory) | Written, not currently exercised — see Roadmap |
@@ -85,7 +85,25 @@ pip install -e ".[dev]"
 pytest
 ```
 
-45 tests pass, 1 skips. The skip is `test_database_sandbox.py`, which needs a
+### Reviewing a real BOM
+
+```bash
+helix-bom review my_bom.csv --budget 50 --enclosure 100x80x25
+```
+
+Takes a CSV export from KiCad, Altium, or a spreadsheet as-is: it finds the
+header past KiCad's preamble lines, detects semicolon delimiters, excludes
+do-not-populate rows, and reads `1.234,56` and `1,234.56` as the same amount
+by deciding the convention per file rather than per cell.
+
+It reports what it **could not** check as loudly as what it could. A plain
+KiCad export has no prices, dimensions, power figures or lead times, so most
+checks cannot run — and a report that stayed quiet about that would read as a
+clean bill of health. `--strict` turns "could not check" into a non-zero exit,
+which is what you want gating a build. `--json` emits the same information for
+a machine.
+
+135 tests pass, 1 skips. The skip is `test_database_sandbox.py`, which needs a
 live PostgreSQL 16 + pgvector instance; it is skipped rather than failed so a
 red suite always means a real regression.
 
@@ -99,8 +117,11 @@ template. Never paste a real key into a chat.
 
 ```
 src/helix_grounding/   the product — domain-agnostic, zero dependencies
-    domains/bom.py     reference adapter; a new vertical is a new file here
-src/helix_bom/         the proving ground: BOM review agent
+    domains/           bom.py, invoice.py; a new vertical is a new file here
+src/helix_bom/         the proving ground
+    ingest.py          reads real CSV exports, reports every assumption
+    agent.py           the deterministic checks
+    cli.py             the helix-bom command
 src/helix_llm/         model client abstraction
 src/helix_api/         HTTP surface
 tests/                 pytest suite

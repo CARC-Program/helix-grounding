@@ -25,8 +25,11 @@ dependencies = []
 [project.optional-dependencies]
 dev = ["pytest>=8"]
 
+[project.scripts]
+helix-bom = "helix_bom.cli:main"
+
 [tool.hatch.build.targets.wheel]
-packages = ["src/helix_grounding"]
+packages = ["src/helix_grounding", "src/helix_bom"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

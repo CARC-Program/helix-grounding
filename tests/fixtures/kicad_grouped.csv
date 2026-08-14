@@ -1,0 +1,11 @@
+Source:,/home/dev/proj/sensor-board.kicad_sch
+Date:,"Saturday 16 August 2026 at 11:04:22"
+Tool:,"Eeschema 8.0.4"
+Generator:,bom_csv_grouped_by_value
+Component Count:,5
+Ref,Qnty,Value,Cmp name,Footprint,Description,Vendor
+"R1,R2,R3",3,10k,R_0603,Resistor_SMD:R_0603_1608Metric,"Resistor, 10k 1%",
+"C1,C2",2,100nF,C_0603,Capacitor_SMD:C_0603_1608Metric,"Capacitor, 100nF X7R",
+U1,1,STM32F401RE,MCU,Package_QFP:LQFP-64_10x10mm_P0.5mm,"MCU, ARM Cortex-M4",
+U2,1,BME280,Sensor,Package_LGA:Bosch_LGA-8_2.5x2.5mm,"Sensor, temp/humidity/pressure",
+J1,1,USB-C,Conn,Connector_USB:USB_C_Receptacle,"Connector, USB-C receptacle",

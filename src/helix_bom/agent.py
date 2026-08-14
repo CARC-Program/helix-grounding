@@ -81,18 +81,56 @@ class ReviewFinding:
 
 
 @dataclass
+class SkippedCheck:
+    """A check that could not run because the submitted data lacks the field
+    it needs.
+
+    This type exists because of the most dangerous failure this agent had. A
+    real BOM export -- from KiCad, Altium, or a spreadsheet -- carries
+    references, quantities and prices, and carries no dimensions, no power
+    draw and no category. Fed one of those, the physical-fit and power checks
+    compared zeros against the enclosure, found nothing wrong, and stayed
+    silent. The report came back clean.
+
+    "Clean" and "not checked" are opposite claims and looked identical. A
+    skipped check is now stated as loudly as a finding.
+    """
+
+    name: str
+    reason: str
+
+
+@dataclass
 class ReviewResult:
     findings: list = field(default_factory=list)
     total_cost_usd: float = 0.0
     total_power_w: float = 0.0
     over_budget: bool = False
     over_power_budget: bool = False
+    skipped_checks: list = field(default_factory=list)
+
+    @property
+    def is_complete(self) -> bool:
+        """True only when every check ran. A caller presenting results to
+        somebody else should say so when this is False."""
+        return not self.skipped_checks
 
 
 class BOMReviewAgent:
     """Deterministic component-selection review — no LLM call in this class."""
 
-    def review(self, components: list, constraints: DesignConstraints) -> ReviewResult:
+    TOTAL_CHECKS = 5
+
+    def review(self, components: list, constraints: DesignConstraints,
+               available_fields=None) -> ReviewResult:
+        """Run the deterministic checks.
+
+        ``available_fields`` names the Component fields the source data
+        actually supplied -- pass ``IngestReport.mapped`` when the input
+        came from a file. Without it the agent infers availability from
+        the values, which is workable for hand-built input but cannot
+        distinguish a real zero from a missing column.
+        """
         result = ReviewResult()
 
         # Real gap fixed here: a line item's true cost/power contribution
@@ -103,8 +141,67 @@ class BOMReviewAgent:
         result.total_cost_usd = sum(c.cost_usd * c.quantity for c in components)
         result.total_power_w = sum(c.power_draw_w * c.quantity for c in components)
 
+        # Which checks the submitted data can actually support. Absent data is
+        # not the same as a zero measurement, and treating it as one is how a
+        # check silently passes without running.
+        #
+        # `available_fields` is authoritative when the caller knows -- the
+        # ingest layer reads the file's headers and can say outright that
+        # there was no price column. Inferring from the values is the fallback
+        # for hand-built input, and it is strictly worse, because a zero is
+        # ambiguous: a lead time of 0 means "in stock", not "unknown". Warning
+        # that lead time went unchecked on a fully in-stock BOM is a false
+        # positive, and a false positive here trains the reader to skim past
+        # the section that exists to be read.
+        def present(field_name: str, inferred: bool) -> bool:
+            if available_fields is not None:
+                return field_name in available_fields
+            return inferred
+
+        has_cost = present("cost_usd", any(c.cost_usd for c in components))
+        has_power = present("power_draw_w", any(c.power_draw_w for c in components))
+        has_dimensions = present("width_mm", any(
+            c.width_mm or c.depth_mm or c.height_mm for c in components
+        ))
+        has_categories = present("category", any(c.category for c in components))
+        # Deliberately not inferred: every value being 0 is a valid BOM in
+        # which nothing has a lead time worth flagging.
+        has_lead_times = present("lead_time_days", True)
+
+        if not has_cost:
+            result.skipped_checks.append(SkippedCheck(
+                "budget",
+                "no unit prices in the submitted data — add a price or cost "
+                "column to check the BOM against a budget",
+            ))
+        if not has_power:
+            result.skipped_checks.append(SkippedCheck(
+                "power budget",
+                "no power draw figures in the submitted data — standard EDA "
+                "exports do not include these, so they must be supplied "
+                "separately if the power budget matters",
+            ))
+        if not has_dimensions:
+            result.skipped_checks.append(SkippedCheck(
+                "physical fit",
+                "no component dimensions in the submitted data — standard EDA "
+                "exports carry footprints, not millimetres, so enclosure fit "
+                "cannot be checked from this file alone",
+            ))
+        if not has_categories:
+            result.skipped_checks.append(SkippedCheck(
+                "missing-category sanity check",
+                "no category column in the submitted data",
+            ))
+        if not has_lead_times:
+            result.skipped_checks.append(SkippedCheck(
+                "supply-chain lead time",
+                "no lead-time figures in the submitted data — these usually "
+                "come from a distributor, not the EDA tool",
+            ))
+
         # Budget check
-        if result.total_cost_usd > constraints.budget_usd:
+        if has_cost and result.total_cost_usd > constraints.budget_usd:
             result.over_budget = True
             overage = result.total_cost_usd - constraints.budget_usd
             result.findings.append(ReviewFinding(
@@ -114,7 +211,7 @@ class BOMReviewAgent:
             ))
 
         # Power budget check
-        if result.total_power_w > constraints.power_budget_w:
+        if has_power and result.total_power_w > constraints.power_budget_w:
             result.over_power_budget = True
             overage_w = result.total_power_w - constraints.power_budget_w
             result.findings.append(ReviewFinding(
@@ -134,13 +231,13 @@ class BOMReviewAgent:
         widest_component = max(components, key=lambda c: c.width_mm, default=None)
         deepest_component = max(components, key=lambda c: c.depth_mm, default=None)
 
-        if widest_component and widest_component.width_mm > constraints.enclosure_width_mm:
+        if has_dimensions and widest_component and widest_component.width_mm > constraints.enclosure_width_mm:
             result.findings.append(ReviewFinding(
                 "critical",
                 f"{widest_component.name} ({widest_component.width_mm:.1f}mm wide) exceeds "
                 f"enclosure width ({constraints.enclosure_width_mm:.1f}mm)."
             ))
-        if deepest_component and deepest_component.depth_mm > constraints.enclosure_depth_mm:
+        if has_dimensions and deepest_component and deepest_component.depth_mm > constraints.enclosure_depth_mm:
             result.findings.append(ReviewFinding(
                 "critical",
                 f"{deepest_component.name} ({deepest_component.depth_mm:.1f}mm deep) exceeds "
@@ -158,7 +255,7 @@ class BOMReviewAgent:
         # board-layer/mounting-side field this BOM format doesn't carry,
         # and pretending otherwise would be false precision.
         tallest_component = max(components, key=lambda c: c.height_mm, default=None)
-        if tallest_component and tallest_component.height_mm > constraints.enclosure_height_mm:
+        if has_dimensions and tallest_component and tallest_component.height_mm > constraints.enclosure_height_mm:
             result.findings.append(ReviewFinding(
                 "warning",
                 f"Tallest single component ({tallest_component.name}, "
@@ -172,7 +269,7 @@ class BOMReviewAgent:
         # Missing-category sanity check
         categories_present = {c.category for c in components}
         expected = {"compute", "power"}
-        missing = expected - categories_present
+        missing = expected - categories_present if has_categories else set()
         for m in missing:
             result.findings.append(ReviewFinding(
                 "warning",
@@ -196,9 +293,26 @@ class BOMReviewAgent:
             ))
 
         if not result.findings:
-            result.findings.append(ReviewFinding(
-                "info", "No critical issues found in deterministic checks."
-            ))
+            if result.is_complete:
+                result.findings.append(ReviewFinding(
+                    "info", "No issues found. Every check ran against the "
+                            "submitted data."
+                ))
+            else:
+                # Never report a clean bill of health for checks that did not
+                # run. Naming the count here means the headline finding can
+                # never be read as "your build is fine" when it means "I could
+                # only look at part of it".
+                ran = self.TOTAL_CHECKS - len(result.skipped_checks)
+                names = ", ".join(s.name for s in result.skipped_checks)
+                result.findings.append(ReviewFinding(
+                    "warning",
+                    f"No issues found in the {ran} check(s) that could run — "
+                    f"but {len(result.skipped_checks)} check(s) were skipped "
+                    f"for missing data ({names}). This is not a clean bill of "
+                    f"health; see the skipped-checks list for what each one "
+                    f"needs."
+                ))
 
         return result
 

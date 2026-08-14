@@ -41,12 +41,18 @@ output.*
 *Closes when: a hardware maker who has never spoken to the author runs a BOM
 through it and gets a report back.*
 
-- [ ] Decide the surface: CLI, web upload, or both. A CLI is faster to build
-      and reaches the right audience — hardware people live in terminals
-- [ ] Accept the BOM formats people actually have (CSV export from KiCad,
-      Altium, a spreadsheet), not the hand-built Python objects the tests use
-- [ ] Make the failure modes legible when input is messy, missing columns, or
-      has the wrong units
+- [x] Surface chosen: a CLI. The audience already has a terminal open next
+      to their EDA tool and a file on disk; a web form asks for more work
+      than the tool saves
+- [x] Read the formats people actually have — KiCad preamble lines,
+      semicolon delimiters, DNP columns, European decimal commas, Excel BOMs
+- [x] Legible failure modes: every assumption is reported, unreadable cells
+      are named with their spreadsheet row, and a file that is not a BOM is
+      refused rather than guessed at
+- [x] **Never report a check that did not run as a pass.** The agent now
+      names each skipped check and what it needs
+- [ ] Get it in front of one hardware maker who has never spoken to the
+      author. Everything above is preparation; this is the milestone
 - [ ] Publish one real caught fabrication as a case study — D-036 is already
       written up and is the strongest evidence the approach works
 

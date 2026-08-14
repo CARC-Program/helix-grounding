@@ -1,0 +1,7 @@
+Comment;Description;Designator;Footprint;Quantity;Manufacturer;Manufacturer Part Number;Unit Price;Lead Time (days);DNP
+10k;Resistor 10k 1%;R1, R2, R3;0603;3;Yageo;RC0603FR-0710KL;$0.02;7;
+100nF;Capacitor 100nF;C1, C2;0603;2;Murata;GRM188R71C104KA01D;$0.04;7;
+STM32F401RE;ARM Cortex-M4 MCU;U1;LQFP-64;1;ST;STM32F401RET6;$8.42;120;
+BME280;Environmental sensor;U2;LGA-8;1;Bosch;BME280;$4.10;98;
+USB-C;USB-C receptacle;J1;SMD;1;Amphenol;12401598E4#2A;$1.15;21;
+Test point;Debug pad - not fitted;TP1;THT;1;;;$0.00;0;Yes

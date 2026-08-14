@@ -1,0 +1,29 @@
+# Secrets — never commit. There is a populated .env in AI_CODE/; committing it
+# would put the key in history permanently, where deleting the file later does
+# not remove it.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local databases and generated output
+*.sqlite
+*.sqlite3
+*.db
+diagram_output/
+
+# OS
+Thumbs.db
+desktop.ini
+.DS_Store

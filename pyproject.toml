@@ -1,0 +1,33 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "helix-grounding"
+version = "0.1.0"
+description = "Deterministic verification of factual values in AI-generated text"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+keywords = ["llm", "hallucination", "grounding", "validation", "evals", "guardrails"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Topic :: Software Development :: Quality Assurance",
+]
+
+# No runtime dependencies, deliberately. The whole argument for this library is
+# that checking a model's output should not require another model call -- a
+# dependency on an inference client would undercut the claim.
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/helix_grounding"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src", "10_SOFTWARE_DEVELOPMENT/AI_CODE"]

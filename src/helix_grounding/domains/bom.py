@@ -18,7 +18,12 @@ from __future__ import annotations
 from typing import Any, Iterable, Protocol, runtime_checkable
 
 from ..claims import ClaimKind
+from ..extractors import IdentifierExtractor
 from ..truth import GroundTruth
+
+# Reused for reading identifiers out of the source data, so input and output
+# are parsed by the same rules.
+_IDENTIFIERS = IdentifierExtractor()
 
 
 @runtime_checkable
@@ -90,6 +95,20 @@ def ground_truth_for_bom(
                     truth.allow(ClaimKind.MEASUREMENT, float(lead_time), unit)
 
         truth.allow_token(_attr(component, "manufacturer_part_number", "") or "")
+
+        # Also harvest identifiers out of the component's own name. A BOM line
+        # called "ESP32-S3 module" with the part number ESP32-S3-WROOM-1 makes
+        # "the ESP32-S3 module" a faithful description, not an invention -- but
+        # harvesting only the MPN field flagged it, because the shortened
+        # family name is not the full part number. Referring to a part by the
+        # name the BOM itself gives it has to be grounded, or the checker
+        # produces noise on ordinary correct English.
+        #
+        # Using the same extractor that reads generated text means the source
+        # and the output are read by identical rules, so anything the checker
+        # would flag in output is recognised when it appears in input.
+        for claim in _IDENTIFIERS.extract(str(_attr(component, "name", "") or "")):
+            truth.allow_token(str(claim.value))
 
     total_power = sum(
         float(c.power_draw_w) * int(c.quantity) for c in components

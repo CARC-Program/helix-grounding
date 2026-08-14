@@ -21,19 +21,11 @@ import pytest
 SANDBOX_DIR = Path(__file__).parent / "sandbox"
 REPO_ROOT = Path(__file__).parent.parent
 
-# Needs a live PostgreSQL 16 + pgvector instance, which is not part of the
-# default developer setup. Skipped rather than failed so a red suite always
-# means a real regression.
-REQUIRES_POSTGRES = {"test_database_sandbox.py"}
-
 SCRIPTS = sorted(p.name for p in SANDBOX_DIR.glob("test_*.py"))
 
 
 @pytest.mark.parametrize("script", SCRIPTS)
 def test_sandbox_script(script):
-    if script in REQUIRES_POSTGRES:
-        pytest.skip("needs a running PostgreSQL 16 + pgvector instance")
-
     env = dict(os.environ)
     env["PYTHONPATH"] = os.pathsep.join([
         str(REPO_ROOT / "src"),

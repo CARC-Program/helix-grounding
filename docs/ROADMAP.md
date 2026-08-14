@@ -53,8 +53,9 @@ through it and gets a report back.*
       names each skipped check and what it needs
 - [ ] Get it in front of one hardware maker who has never spoken to the
       author. Everything above is preparation; this is the milestone
-- [ ] Publish one real caught fabrication as a case study — D-036 is already
-      written up and is the strongest evidence the approach works
+- [x] Publish one real caught fabrication as a case study — `docs/CASE_STUDY.html`,
+      reproducible via `scripts/reproduce_d036.py` and asserted by the test
+      suite, so the claims cannot quietly stop being true
 
 ### M3 — First payment
 *Closes when: money arrives from someone unrelated to the author.*
@@ -70,11 +71,6 @@ through it and gets a report back.*
 
 Ordered by evidence, not appeal.
 
-- **Rewrite or retire the Postgres schema.** It models `clients`,
-  `deliverables`, and retainer status: the consulting business that was
-  eliminated. The audit-trail and pgvector portions may be worth keeping; the
-  client-relationship tables should not be resurrected unmodified. Decide
-  before installing Postgres to make one test pass.
 - **Replace terminal-signature auth with API keys.** `helix_api.auth` models a
   secure element on hardware that was cut. It is a well-built solution to a
   problem the project no longer has.

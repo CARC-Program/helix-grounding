@@ -74,7 +74,6 @@ because it is planned.
 | `src/helix_bom/` | BOM review: CSV ingest, deterministic checks, `helix-bom` CLI | Working, 57 tests + 14 sandbox suites |
 | `src/helix_llm/` | Backend-agnostic model client (local Ollama by default, Anthropic optional) | Working, local path unverified end-to-end on this machine |
 | `src/helix_api/` | FastAPI orchestrator with signature auth and audit logging | Skeleton — routes work, not deployed |
-| `migrations/` | PostgreSQL schema (audit trail, pgvector memory) | Written, not currently exercised — see Roadmap |
 
 ## Running it
 
@@ -103,9 +102,9 @@ clean bill of health. `--strict` turns "could not check" into a non-zero exit,
 which is what you want gating a build. `--json` emits the same information for
 a machine.
 
-135 tests pass, 1 skips. The skip is `test_database_sandbox.py`, which needs a
-live PostgreSQL 16 + pgvector instance; it is skipped rather than failed so a
-red suite always means a real regression.
+138 tests pass, nothing is skipped, and nothing but Python is required. The
+project has no database and no server dependency — the library and the CLI
+are both stateless.
 
 The BOM agent's LLM synthesis layer needs a backend. By default it calls a
 local Ollama instance — see `docs/OLLAMA_SETUP.md`. To use the hosted Anthropic
@@ -126,11 +125,25 @@ src/helix_llm/         model client abstraction
 src/helix_api/         HTTP surface
 tests/                 pytest suite
     sandbox/           script-style suites, run as subprocesses
-docs/DECISION_LOG.md   43 decisions with reasoning — read this one
+docs/DECISION_LOG.md   44 decisions with reasoning — read this one
+docs/CASE_STUDY.html   a real caught fabrication, reproducible
 docs/MARKET_RESEARCH.html
-migrations/            PostgreSQL schema
 scripts/               developer utilities
 ```
+
+## Evidence
+
+`docs/CASE_STUDY.html` walks through two false statements a model actually
+made reviewing a BOM, and why catching them took two different defences —
+only one was a fabricated *value*; the other was a wrong *relation* between
+two real ones. Reproduce both:
+
+```bash
+python scripts/reproduce_d036.py
+```
+
+It is part of the test suite, so the case study cannot quietly stop being
+true while still making its claims.
 
 ## History
 

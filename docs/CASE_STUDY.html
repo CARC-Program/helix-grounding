@@ -1,0 +1,265 @@
+<title>Two Wrong Sentences</title>
+<style>
+:root{
+  --paper:#FBFAF7; --panel:#FFFFFF; --sunk:#F2EFE9;
+  --ink:#1A1815; --ink-2:#4A453D; --ink-3:#7A736A;
+  --rule:#E0DAD0; --rule-2:#C9C1B4;
+  --indigo:#2F4E8C; --indigo-soft:#EAEEF6;
+  --ochre:#A8681B; --ochre-soft:#F7EEE1;
+  --measure:66ch;
+  --serif:Constantia,Charter,"Iowan Old Style",Georgia,Cambria,serif;
+  --mono:"Cascadia Mono",Consolas,ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#14130F; --panel:#1B1A15; --sunk:#221F19;
+    --ink:#EDE9E0; --ink-2:#B8B2A6; --ink-3:#847D71;
+    --rule:#2E2B24; --rule-2:#413C33;
+    --indigo:#8AA8E0; --indigo-soft:#1A1F2C;
+    --ochre:#D9A45C; --ochre-soft:#26200F;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#14130F; --panel:#1B1A15; --sunk:#221F19;
+  --ink:#EDE9E0; --ink-2:#B8B2A6; --ink-3:#847D71;
+  --rule:#2E2B24; --rule-2:#413C33;
+  --indigo:#8AA8E0; --indigo-soft:#1A1F2C;
+  --ochre:#D9A45C; --ochre-soft:#26200F;
+}
+*{box-sizing:border-box}
+body{
+  background:var(--paper); color:var(--ink);
+  font-family:var(--serif); font-size:17.5px; line-height:1.6;
+  margin:0; padding:0 1.5rem 6rem; -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:var(--measure); margin:0 auto}
+
+header.mast{padding:4.5rem 0 2rem}
+.eyebrow{
+  font-family:var(--mono); font-size:.66rem; letter-spacing:.17em;
+  text-transform:uppercase; color:var(--ink-3); margin:0 0 1.6rem;
+  display:flex; flex-wrap:wrap; gap:.4rem 1rem;
+}
+h1{
+  font-size:clamp(2.3rem,7vw,3.6rem); line-height:1.02; font-weight:400;
+  letter-spacing:-.022em; margin:0 0 1.3rem; text-wrap:balance;
+}
+.standfirst{font-size:1.2rem; color:var(--ink-2); margin:0 0 1.1rem; text-wrap:pretty}
+.mast hr{border:0; border-top:2px solid var(--ink); margin:2.2rem 0 0}
+
+section{padding:3rem 0 0}
+h2{
+  font-size:1.6rem; font-weight:400; letter-spacing:-.014em;
+  margin:0 0 .3rem; text-wrap:balance;
+}
+h2 .n{
+  font-family:var(--mono); font-size:.62rem; letter-spacing:.16em;
+  text-transform:uppercase; color:var(--ink-3);
+  display:block; margin-bottom:.7rem; font-weight:400;
+}
+h3{font-size:1.06rem; font-weight:700; margin:2rem 0 .5rem}
+p{margin:0 0 1.05rem; text-wrap:pretty}
+strong{font-weight:700}
+em{font-style:italic}
+a{color:var(--indigo); text-underline-offset:2px}
+a:focus-visible{outline:2px solid var(--indigo); outline-offset:3px}
+ul{margin:0 0 1.05rem; padding-left:1.3rem; display:flex; flex-direction:column; gap:.55rem}
+code{font-family:var(--mono); font-size:.86em; background:var(--sunk); padding:.1em .35em; border-radius:2px}
+
+/* evidence — the visual anchor */
+.evidence{
+  background:var(--panel); border:1px solid var(--rule);
+  margin:0 0 1.2rem; overflow:hidden;
+}
+.evidence .lab{
+  font-family:var(--mono); font-size:.62rem; letter-spacing:.15em;
+  text-transform:uppercase; color:var(--ink-3);
+  padding:.7rem 1.1rem; border-bottom:1px solid var(--rule); margin:0;
+}
+.evidence .said{
+  font-family:var(--mono); font-size:.86rem; line-height:1.62;
+  padding:1.1rem; margin:0; color:var(--ink);
+  overflow-x:auto; white-space:pre-wrap;
+}
+.evidence .said b{background:var(--ochre-soft); color:var(--ochre); font-weight:700; padding:.05em .2em}
+.verdict{
+  display:flex; gap:.8rem; align-items:baseline;
+  padding:.85rem 1.1rem; border-top:1px solid var(--rule);
+  font-family:var(--mono); font-size:.76rem; line-height:1.5;
+}
+.verdict .tag{
+  font-size:.6rem; letter-spacing:.12em; text-transform:uppercase;
+  padding:.2rem .5rem; white-space:nowrap; flex:none; font-weight:700;
+}
+.verdict.pass .tag{background:var(--indigo-soft); color:var(--indigo); border:1px solid var(--indigo)}
+.verdict.caught .tag{background:var(--ochre-soft); color:var(--ochre); border:1px solid var(--ochre)}
+.verdict span{color:var(--ink-2)}
+
+.defence{
+  border-left:3px solid var(--rule-2); padding:.15rem 0 .15rem 1.15rem;
+  margin:0 0 1.05rem; color:var(--ink-2);
+}
+.defence.code{border-left-color:var(--indigo)}
+.defence.check{border-left-color:var(--ochre)}
+.defence .lab{
+  font-family:var(--mono); font-size:.62rem; letter-spacing:.15em;
+  text-transform:uppercase; margin:0 0 .3rem; font-weight:700;
+}
+.defence.code .lab{color:var(--indigo)}
+.defence.check .lab{color:var(--ochre)}
+.defence p{margin:0}
+
+.matrix{overflow-x:auto; border:1px solid var(--rule); background:var(--panel); margin:0 0 1rem}
+table{border-collapse:collapse; width:100%; min-width:520px; font-family:var(--mono); font-size:.78rem}
+th{
+  text-align:left; font-size:.6rem; letter-spacing:.13em; text-transform:uppercase;
+  color:var(--ink-3); padding:.8rem .8rem; border-bottom:1px solid var(--rule-2); font-weight:400;
+}
+td{padding:.8rem; border-bottom:1px solid var(--rule); vertical-align:top; color:var(--ink-2)}
+tr:last-child td{border-bottom:none}
+td.k{color:var(--ink); font-weight:700}
+
+.repro{
+  background:var(--sunk); border:1px solid var(--rule);
+  padding:1.1rem 1.2rem; margin:0 0 1.05rem;
+}
+.repro p{margin:0 0 .6rem}
+.repro pre{
+  font-family:var(--mono); font-size:.8rem; margin:0;
+  overflow-x:auto; color:var(--ink);
+}
+.caption{font-family:var(--mono); font-size:.68rem; color:var(--ink-3); line-height:1.55; margin:0 0 1.05rem}
+footer{
+  margin-top:4rem; padding-top:1.4rem; border-top:2px solid var(--ink);
+  font-family:var(--mono); font-size:.68rem; letter-spacing:.05em; color:var(--ink-3);
+}
+</style>
+
+<div class="wrap">
+<header class="mast">
+  <p class="eyebrow">Project Helix <span>/</span> Incident D-036 <span>/</span> 2026-07-15</p>
+  <h1>Two Wrong Sentences</h1>
+  <p class="standfirst">A model reviewing a bill of materials produced two false statements in one run. They were wrong in different ways, and only one of them was catchable by checking values against source data. That difference is the entire argument for how this system is built.</p>
+  <hr>
+</header>
+
+<section>
+  <h2><span class="n">Setup</span>What the model was asked to do</h2>
+  <p>An eighteen-line bill of materials went through the full pipeline: deterministic checks first, then a local language model writing the narrative recommendation a client reads. Two of those lines matter here.</p>
+
+  <div class="matrix">
+    <table>
+      <thead><tr><th>Part</th><th>Price</th><th>Lead time</th></tr></thead>
+      <tbody>
+        <tr><td class="k">ESP32-S3 module</td><td>$3.20</td><td>21 days</td></tr>
+        <tr><td class="k">BME280 sensor</td><td>$2.40</td><td>112 days</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>The BME280's lead time crosses the ninety-day risk threshold, so the tool looked up substitutes and handed them to the model: a Bosch <strong>BME680</strong> at $3.10 shipping in 14 days, and a Sensirion <strong>SHT31-DIS-B</strong> at $1.95 shipping in 21 days.</p>
+
+  <p>Everything the model needed was in front of it, correct. Here is what it wrote.</p>
+</section>
+
+<section>
+  <h2><span class="n">Error one</span>The comparison was backwards</h2>
+
+  <div class="evidence">
+    <p class="lab">Model output, verbatim</p>
+    <p class="said">For the BME280 sensor, the Bosch BME680 at $3.10 is <b>slightly cheaper</b> than your current part at $2.40 and ships far sooner.</p>
+    <div class="verdict pass"><span class="tag">Grounding check: passes</span><span>4 claims verified, 0 ungrounded</span></div>
+  </div>
+
+  <p>$3.10 is not cheaper than $2.40. It is seventy cents more expensive, and the lookup data the model was handed said <em>"higher cost"</em> in plain words.</p>
+
+  <p>The grounding check passes this sentence, and it is <strong>right</strong> to. Every number in it is real: $3.10 and $2.40 both appear in the source data, exactly as written. What is false is the word <em>cheaper</em> — a claim about the relationship between two values, not about either value.</p>
+
+  <p>No amount of value-checking catches that. A library claiming otherwise would be misrepresenting its own scope, which is a worse failure than the one it is trying to prevent.</p>
+
+  <div class="defence code">
+    <p class="lab">Defence — arithmetic moved into code</p>
+    <p>The cost delta is now computed in Python before the prompt is assembled. The model receives the finished comparison — <em>"$0.70 MORE expensive than the original"</em> — and is asked only to phrase it. It is never asked to work out which of two numbers is larger, because that is a thing it demonstrably gets wrong and a thing a computer has never once got wrong.</p>
+  </div>
+
+  <p>This is not a prompt fix. Prompting a model to be more careful with arithmetic is a request; removing the arithmetic is a guarantee.</p>
+</section>
+
+<section>
+  <h2><span class="n">Error two</span>A price that did not exist</h2>
+
+  <div class="evidence">
+    <p class="lab">Model output, verbatim</p>
+    <p class="said">The ESP32-S3 module at <b>$3.40</b> has a lead time concern; consider the SHT31-DIS-B at $1.95 as a second source.</p>
+    <div class="verdict caught"><span class="tag">Grounding check: rejected</span><span>1 of 4 claims not found in source data — $3.40 (currency)</span></div>
+  </div>
+
+  <p>The ESP32-S3 costs $3.20. There is no $3.40 anywhere in the submitted data. The model also attached a temperature sensor to a compute module as though they were interchangeable, and invented a lead-time concern for a part that had none.</p>
+
+  <p>This one is caught, and caught cheaply. The value is in the allowed set or it is not — no second model is consulted, no confidence score is produced, nothing that can itself hallucinate is involved in the decision.</p>
+
+  <div class="defence check">
+    <p class="lab">Defence — deterministic grounding check</p>
+    <p>Every currency amount, measurement, identifier, quantity, percentage and date is extracted from the generated text and compared against values computed from the source. Text that fails is regenerated with the specific invented value named. After the retry budget is exhausted, the narrative is withheld entirely and the deterministic findings are delivered alone.</p>
+  </div>
+
+  <p>The correction fed back to the model is specific rather than a scolding, because a blind re-roll reproduces the same error at roughly the same rate:</p>
+
+  <div class="repro">
+<pre>YOUR PREVIOUS ATTEMPT CONTAINED VALUES THAT DO NOT APPEAR IN
+THE SOURCE DATA...
+
+  - $3.40 (currency) in: "The ESP32-S3 module at $3.40 has a
+    lead time concern; consider the SHT31-DIS-B at $1.95..."
+
+State only values that appear explicitly in the data provided
+above. If you need a value you were not given, omit the claim
+entirely rather than estimating it.</pre>
+  </div>
+</section>
+
+<section>
+  <h2><span class="n">The point</span>Two failure modes, two defences</h2>
+
+  <p>The temptation after an incident like this is to pick one defence and call it the answer. Both errors came from the same model in the same run, and neither defence would have stopped both.</p>
+
+  <div class="matrix">
+    <table>
+      <thead><tr><th>Failure</th><th>Shape</th><th>Stopped by</th><th>When</th></tr></thead>
+      <tbody>
+        <tr>
+          <td class="k">"slightly cheaper"</td>
+          <td>Wrong relation between two real values</td>
+          <td style="color:var(--indigo)">Arithmetic in code</td>
+          <td>Never generated</td>
+        </tr>
+        <tr>
+          <td class="k">"$3.40"</td>
+          <td>Value absent from source data</td>
+          <td style="color:var(--ochre)">Grounding check</td>
+          <td>Rejected before delivery</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="caption">Neither defence is a model checking a model. Both cost less than an inference call, and neither can itself fabricate.</p>
+
+  <p>The general rule this incident produced, recorded at the time and applied since: <strong>arithmetic and multi-entity bookkeeping belong in deterministic code.</strong> The model's job is to phrase something already correct, never to compute something and then be trusted about it. That rule was not designed in advance — it was learned from watching a $3.10 part get called cheaper than a $2.40 one.</p>
+</section>
+
+<section>
+  <h2><span class="n">Verify it</span>Run the reproduction yourself</h2>
+
+  <p>Both errors above are reproducible from the repository. The script asserts the behaviour this page describes — that the backwards comparison passes the grounding check and the fabricated price fails it — and exits non-zero if either ever stops being true.</p>
+
+  <div class="repro">
+<pre>python scripts/reproduce_d036.py</pre>
+  </div>
+
+  <p>It is also part of the test suite, so the claims on this page cannot quietly stop being accurate while the page keeps making them.</p>
+</section>
+
+<footer>
+  Project Helix · Incident D-036 · Full entry in docs/DECISION_LOG.md
+</footer>
+</div>

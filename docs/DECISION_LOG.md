@@ -1366,3 +1366,51 @@ lost once the owner's copy was used as source of truth.
 this whole session's delta-based workflow, the durable canonical copy —
 Claude's own working environment should be treated as disposable/
 reconstructable from it, not the other way around.
+
+## D-044 — PostgreSQL schema retired; it modelled a business that no longer exists
+
+**Decision:** deleted `migrations/001_initial_schema.sql` and
+`tests/sandbox/test_database_sandbox.py`. The project now has no database
+dependency at all.
+
+**Why:** the owner authorised installing PostgreSQL so the one skipped test
+could run. Before doing that, the schema was read against the direction set
+by the market research, and three of its five tables turned out to model the
+consulting business that research eliminated: `clients` carries a
+prospect/free_review/retainer/churned funnel, and `deliverables` is a
+retainer artifact. `evolution_log` serves the self-evolving AI subsystem,
+which does not exist and is not on the roadmap. `memory_embeddings` is a
+1536-dimension pgvector column for an AI memory system that likewise does
+not exist — the dimension was itself a placeholder, since no embedding model
+had been selected.
+
+The fifth table, `agent_actions`, is genuinely worth having. It is also
+already implemented, in `helix_api/audit.py`, against stdlib SQLite with no
+server to install.
+
+**What was actually being proposed:** installing a database server, plus
+pgvector — which on Windows means building against MSVC or hunting a
+prebuilt binary — so that one test could exercise tables no code reads, for
+a business model already ruled out. That is the same failure the rebuild
+corrected: building infrastructure ahead of the product, then counting it
+as progress.
+
+**Verification, not assertion:** grepped the whole source tree for every
+table name and for `psycopg` before deleting. Nothing outside the deleted
+test referenced any of it.
+
+**Cost impact:** none. Removes a server dependency, removes the only skipped
+test in the suite, and removes ~85 lines of SQL. The suite now needs nothing
+but Python.
+
+**Recoverable:** the schema is intact in git history — `master` holds it at
+the pre-rebuild baseline, and it is in this branch until this commit. If a
+hosted deployment ever needs Postgres, the audit table should be generated
+from `helix_api/audit.py`'s schema, which is the one that has actually been
+exercised, rather than resurrected from a file written for a different
+business.
+
+**Future implications:** the product is currently a library and a CLI. Both
+are stateless. A database becomes a real requirement the day there is a
+hosted service with users, and the schema for that should be written then,
+against what that service actually stores — not inherited from this one.

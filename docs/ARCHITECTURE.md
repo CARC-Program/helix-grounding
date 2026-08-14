@@ -131,13 +131,53 @@ none — it manufactures false confidence.
 
 ## helix_bom
 
-The wedge. Deterministic checks against a submitted BOM:
+The wedge. Three layers: `ingest.py` reads the file, `agent.py` runs the
+checks, `cli.py` is the surface.
+
+Deterministic checks against a submitted BOM:
 
 - budget total vs. stated budget (quantity-aware — a fix from D-033)
 - power draw total vs. power budget
 - physical fit against the enclosure envelope
 - missing-category sanity check
 - long-lead-time supply risk
+
+### A check that did not run is not a pass
+
+The agent requires dimensions, power draw and category. **No BOM export from
+any EDA tool carries any of them.** Fed a real KiCad file, the physical-fit and
+power checks compared zeros against the enclosure, found nothing wrong, and
+stayed silent — so the report read as a clean bill of health when it meant
+"I could not look."
+
+Every check now declares whether its data was present. A skipped check is
+recorded as a `SkippedCheck` with the reason, the headline finding refuses to
+read as clean when anything was skipped, and `--strict` makes "could not
+check" a non-zero exit.
+
+Availability comes from the ingest layer's column set where possible, not
+inferred from the values, because a zero is ambiguous: `lead_time_days=0`
+means *in stock*, not *unknown*. Inferring from all-zeros warned that lead
+time went unchecked on a fully in-stock BOM — a false positive, and false
+positives here train the reader to skim past the section that exists to be
+read.
+
+### Reading files people actually have
+
+`ingest.py` finds the header past KiCad's preamble lines rather than assuming
+row 1, detects semicolon delimiters, excludes do-not-populate rows, and
+handles Excel's byte-order mark.
+
+Number conventions are decided **per file, not per cell**. Read alone,
+`1.000` is both one and one thousand and nothing in the cell resolves it; the
+rest of the file does. An earlier version read `1.000` as 1 while reading
+`2,000` as 2000 in the same file — a thousandfold error in a line quantity,
+and therefore in the BOM total.
+
+Every assumption lands in an `IngestReport` the CLI prints: which column
+mapped to which field, which matches were ambiguous, and every cell that
+could not be read, named by its spreadsheet row. A file that is not a BOM is
+refused rather than guessed at.
 
 Plus SVG diagram generation (interconnect sketch, top-down placement blueprint)
 gated by service tier. Both diagrams state in their own rendered text that they
@@ -160,8 +200,8 @@ A skeleton, and labelled as one. The routing shape works and is tested:
 signature verification against a terminal registry, tier gating, audit logging
 of every request including rejected ones. What is **not** wired: real
 hardware-backed auth (the ECDSA keypair here is a software stand-in for a
-secure element that does not exist), the Postgres connection, and Redis-backed
-rate limiting. It has never been deployed or exposed to a network.
+secure element that does not exist), any persistence beyond in-process SQLite,
+and rate limiting. It has never been deployed or exposed to a network.
 
 ## Audit logging
 
@@ -170,18 +210,14 @@ attempt with the specific values that were fabricated. Rejections are recorded
 rather than discarded on purpose: a fabrication that was caught is the evidence
 the safety net works, and throwing it away destroys the only proof.
 
-SQLite in-memory for tests, with an explicit lock around writes because ASGI
-servers run handlers across a thread pool and SQLite forbids cross-thread use
-by default (D-019). Production would use the Postgres schema in `migrations/`.
+SQLite, with an explicit lock around writes because ASGI servers run handlers
+across a thread pool and SQLite forbids cross-thread use by default (D-019).
+There is no Postgres schema any more — see D-044.
 
 ## Open questions
 
 Recorded here rather than answered confidently:
 
-- **The Postgres schema serves a business model that was eliminated.** Its
-  tables are `clients`, `deliverables`, and retainer status — the consulting
-  shape ruled out by `MARKET_RESEARCH.html`. The audit-trail and pgvector parts
-  may survive a rewrite; the client-relationship parts probably should not.
 - **`helix_api`'s auth models hardware that no longer exists.** With the
   cyberdeck cut, the terminal registry is a solution to a problem the project
   does not have. If the product is a library and a hosted API, ordinary API-key

@@ -317,3 +317,41 @@ def test_overlapping_claims_are_reported_once(verifier):
     report = verifier.verify("That is $55.00 over.", truth)
 
     assert len(report.ungrounded) == 1
+
+
+# --------------------------------------------------------------------
+# Identifiers in the source data's own prose
+# --------------------------------------------------------------------
+
+def test_a_part_named_in_the_bom_is_grounded_even_if_it_is_not_the_full_mpn(verifier):
+    """A BOM line called "ESP32-S3 module" with part number ESP32-S3-WROOM-1
+    makes "the ESP32-S3 module" a faithful description, not an invention.
+    Harvesting identifiers from the MPN field alone flagged it — noise on
+    ordinary correct English, found while reproducing D-036."""
+    class C:
+        name = "ESP32-S3 module"
+        cost_usd, quantity = 3.20, 1
+        width_mm = depth_mm = height_mm = 10.0
+        power_draw_w = 0.24
+        manufacturer_part_number = "ESP32-S3-WROOM-1"
+
+    truth = ground_truth_for_bom([C()])
+
+    assert verifier.verify("The ESP32-S3 module draws little power.", truth).is_grounded
+
+
+def test_harvesting_names_does_not_ground_an_unrelated_part(verifier):
+    """The fix must not become a blanket amnesty for anything that looks
+    like a part number."""
+    class C:
+        name = "ESP32-S3 module"
+        cost_usd, quantity = 3.20, 1
+        width_mm = depth_mm = height_mm = 10.0
+        power_draw_w = 0.24
+        manufacturer_part_number = "ESP32-S3-WROOM-1"
+
+    truth = ground_truth_for_bom([C()])
+
+    report = verifier.verify("Swap in the ATMEGA328P instead.", truth)
+    assert not report.is_grounded
+    assert "ATMEGA328P" in [c.value for c in report.ungrounded]

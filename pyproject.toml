@@ -30,4 +30,8 @@ packages = ["src/helix_grounding"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src", "10_SOFTWARE_DEVELOPMENT/AI_CODE"]
+pythonpath = ["src", "tests/sandbox"]
+# tests/sandbox holds script-style suites that run as subprocesses via
+# tests/test_sandbox_suite.py. Ignoring them here stops pytest importing them
+# as modules as well, which would execute each one twice.
+addopts = "--ignore=tests/sandbox"

@@ -6,18 +6,11 @@ ASCII component names that happened not to collide. That is the general
 lesson: test data chosen for readability tests the happy path twice.
 """
 
-import os
-import sys
 import xml.etree.ElementTree as ET
 
 import pytest
 
-sys.path.insert(
-    0,
-    os.path.join(os.path.dirname(__file__), "..", "10_SOFTWARE_DEVELOPMENT", "AI_CODE"),
-)
-
-from visual_diagram_generator import (  # noqa: E402
+from helix_bom.diagrams import (
     generate_placement_blueprint_svg,
     generate_visual_interconnect_svg,
 )

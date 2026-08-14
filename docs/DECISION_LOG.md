@@ -1,0 +1,1368 @@
+# HELIX DECISION LOG
+
+Format per entry: Decision, Reasoning, Alternatives Considered, Cost Impact,
+Future Implications. Entries are appended chronologically.
+
+---
+
+## D-001 — Component selection philosophy: value density over unit count
+
+**Date:** 2026-07-15
+**Decision:** For every MK1 subsystem, prioritize fewer, higher-capability,
+pre-validated modules over many generic discrete parts.
+**Reasoning:** integration engineering cost (firmware/driver bring-up,
+failure surface) scales with part count, and is the dominant cost for a
+solo build — more so than unit price.
+**Alternatives considered:** optimizing purely for lowest unit cost per
+part; rejected as false economy for a one-person team.
+**Cost impact:** neutral-to-positive — several "buy the certified part"
+decisions below (secure element, power bank) are cheaper AND lower-risk
+than the DIY alternative.
+**Future implications:** this principle governs every subsystem decision
+logged below and should be re-applied at each future MK revision.
+
+---
+
+## D-002 — Compute: Jetson Orin Nano Super (System-on-Module), not custom SoC
+
+**Date:** 2026-07-15
+**Decision:** Use NVIDIA Jetson Orin Nano Super module on its stock
+reference carrier board for MK1.0.
+**Reasoning:** 67 TOPS at $249 with a supported lifecycle through 2032;
+full custom silicon is a $500K-$3M+, multi-year undertaking incompatible
+with a solo build at any realistic budget tier.
+**Alternatives considered:** Raspberry Pi CM5 (insufficient AI acceleration
+for HELIX CORE's on-device reasoning goals); Rockchip RK3588 SoM (weaker
+software ecosystem for AI workloads specifically).
+**Cost impact:** $249, largest single line item in the BOM (~45% of core
+subtotal).
+**Future implications:** MK1.1 will migrate to a custom carrier board using
+the bare module to reduce height and enable the slim clamshell target.
+
+---
+
+## D-003 — Security: ATECC608B, not SE050, not software-only
+
+**Date:** 2026-07-15
+**Decision:** Use Microchip ATECC608B secure element in breakout form
+factor.
+**Reasoning:** hardware-based key storage at ~$6, single I2C interface,
+sufficient for MK1.0's actual threat model (protecting local
+credentials/API keys). SE050's CC EAL 6+/FIPS 140-2 certification is real
+capability but is not required until HELIX NEXUS needs to attest to a third
+party.
+**Alternatives considered:** NXP SE050 (deferred, not rejected — revisit at
+MK1.2); software-only key storage (rejected — this is one of the few areas
+where "custom" is worse than "buy," regardless of budget).
+**Cost impact:** ~$6.
+**Future implications:** migrate from breakout to bare SMD part on the
+custom carrier board at MK1.1; re-evaluate SE050 if a third-party
+attestation requirement emerges.
+
+---
+
+## D-004 — Power: external tethered PD power bank, no internal battery
+
+**Date:** 2026-07-15
+**Decision:** MK1.0 uses an external USB-C PD power bank routed through a
+fixed-20V trigger cable into the Jetson's native DC barrel jack. No
+internal battery or custom battery-management circuitry in MK1.0.
+**Reasoning:** removes DIY battery fire-safety risk entirely by relying on
+the power bank's own certified BMS; also removes battery thickness from the
+enclosure stack-up, simplifying MK1.0 mechanical design.
+**Alternatives considered (and corrected):** originally considered powering
+via the carrier board's USB-C port directly — verified against NVIDIA
+documentation and forum reports that this does not work; the USB-C port is
+host/device/debug only, not a power input.
+**Cost impact:** ~$59 (power bank + trigger cable) vs. an estimated
+$80-120+ for a proper internal battery + PMIC + fuel gauge + protection
+circuit design — cheaper AND lower engineering risk.
+**Future implications:** internal battery integration is a genuinely new
+design category for MK1.1, not a small extension of MK1.0's power
+architecture — schedule and budget accordingly.
+
+---
+
+## D-005 — Enclosure: revised thickness target, field-terminal form factor for MK1.0
+
+**Date:** 2026-07-15
+**Decision:** Revise MK1.0 closed-clamshell thickness target from 25-35mm
+(original master document spec) to 45-50mm.
+**Reasoning:** the stock Jetson compute assembly alone is 21-35mm tall; a
+folding clamshell's closed thickness is the sum of both halves' thickness,
+not a shared budget. The original target was not physically achievable
+without first redesigning the carrier board.
+**Alternatives considered:** forcing the original 25-35mm target by
+immediately designing a custom carrier board for MK1.0 — rejected; this
+would front-load MK1.1's highest-risk work (custom high-speed SO-DIMM
+signal routing) into MK1.0, contradicting the project's own "don't build
+the final version first" rule.
+**Cost impact:** neutral — same components, larger enclosure material only.
+**Future implications:** MK1.1 explicitly owns the slim-form-factor goal,
+once the custom carrier board and internal battery are both in place.
+
+---
+
+## D-006 — Deferred: biometric/camera authentication and sensor array
+
+**Date:** 2026-07-15
+**Decision:** Cut camera-based biometric authentication and the full
+sensor array (accelerometer, gyro, ambient light) from MK1.0 scope.
+**Reasoning:** no defined business function currently consumes this data;
+Rule 1 (ROI first) is not satisfied for either subsystem yet. Possession-
+based authentication via the secure element is sufficient for MK1.0.
+**Alternatives considered:** including a camera module now "for future
+use" — rejected; this is exactly the kind of speculative complexity Rule 1
+exists to filter out.
+**Cost impact:** avoids an estimated $40-80 in camera/sensor hardware plus
+associated CSI-connector interface board complexity.
+**Future implications:** revisit at MK1.2 if a concrete threat model or
+business function requires either capability.
+
+---
+
+## D-007 — Process correction: checkpoint-gated delivery, Phase 1 reopened
+
+**Date:** 2026-07-15
+**Decision:** Adopt checkpoint gating (a numbered project folder is not
+"confirmed" until fully complete and internally consistent) and
+single-archive delivery (whole project sent as one package, not
+individual files) going forward.
+**Reasoning:** hardware documentation (Checkpoint 2) was produced before
+foundation documentation (Checkpoint 1: 00 + 01) was complete, contradicting
+the original master prompt's own stated phase order. This created rework
+risk if business-model decisions end up affecting hardware scope, and
+individual-file delivery had already caused a naming mismatch requiring
+correction.
+**Alternatives considered:** continuing file-by-file delivery — rejected
+per direct project-owner feedback that this caused confusion and errors.
+**Cost impact:** none — process change only.
+**Future implications:** Checkpoint 1 must close (business model named,
+all 00+01 files complete) before Checkpoint 2 is considered formally
+confirmed, even though its files are already drafted.
+
+---
+
+## D-008 — Business model strategic shape locked without deferring to owner
+
+**Date:** 2026-07-15
+**Decision:** HELIX generates revenue as a service business (curated
+analysis/automation sold on retainer) rather than a product/SaaS business.
+Specific client niche intentionally left to Phase 0 empirical testing
+rather than invented here.
+**Reasoning:** ran a 2035 disruption-survival test (model deprecation, API
+price shock, platform disappearance, hardware unavailability, competitor
+undercutting) — the service shape survives all five scenarios tested; a
+product/SaaS shape fails the "competitor undercuts the AI layer" test by
+design, since it has no moat beyond the AI itself. The specific niche was
+not invented because doing so would require fabricating facts about the
+project owner's expertise/network/interests that only they possess —
+inventing them would be presented as research but would actually be a
+guess, which fails this project's own rigor standard.
+**Alternatives considered:** product/SaaS-wrapper shape (rejected, fails
+resilience test above); picking a specific arbitrary niche now (rejected —
+would be fabricated, not researched); continuing to ask the project owner
+to name the niche (rejected per explicit instruction not to defer
+strategic decisions back to them).
+**Cost impact:** none — strategic decision only.
+**Future implications:** Phase 0 (90-day window) now has a concrete,
+falsifiable objective: find one niche meeting all five selection criteria
+in HELIX_BUSINESS_MODEL.md with a real paying pilot client. Failure to do
+so triggers a revisit of the hypothesis itself, not indefinite niche
+cycling.
+
+---
+
+## D-009 — Enclosure width corrected; Checkpoint 2 closed
+
+**Date:** 2026-07-15
+**Decision:** Revise MK1.0 enclosure width from 180-200mm to 235-250mm.
+Close Checkpoint 2 (02_HELIX_TERMINAL_MK1_CYBERDECK).
+**Reasoning:** the original width target was derived from the compute
+assembly's own footprint and never checked against the physical keyboard's
+footprint. A minimal usable 12x4 Choc-spaced layout needs ~236-240mm of
+width on its own — wider than the original target. Caught during
+MK1_ENCLOSURE_DESIGN.md drafting, corrected before physical build.
+**Alternatives considered:** shrinking the keyboard further (fewer
+columns/rows) to preserve the original width — rejected; the project
+owner separately confirmed the keyboard needs to retain "main functions"
+for reliability, which argues against shrinking it further to fit an
+arbitrary case dimension. The case should fit the keyboard, not the
+reverse.
+**Cost impact:** none — dimension change only, same components.
+**Future implications:** Checkpoint 2 is now CLOSED. MK1_INPUT_SYSTEM.md
+is being written out as its own file (previously folded into component
+selection) to cover the finalized keyboard spec and the touchscreen-as-
+pointer interaction model, per project owner direction. MK1_CAMERA_
+SECURITY_SYSTEM.md and MK1_SENSOR_SYSTEM.md remain deferred per D-006.
+MK1_MANUFACTURING_PLAN.md remains deferred — not needed for a single
+prototype unit, only relevant once multi-unit production is considered
+(MK2+).
+
+---
+
+## D-010 — Backend architecture: hosting, service shape, agent count
+
+**Date:** 2026-07-15
+**Decision:** HELIX NEXUS runs as a single Hetzner CX22 VPS (~$4.50/mo)
+running five Docker Compose services (Caddy, FastAPI orchestrator,
+Postgres+pgvector, Redis). HELIX CORE builds exactly one agent at MK1.0,
+not the full six-agent roster from the original master document, behind a
+model-agnostic LLM client abstraction.
+**Reasoning:** heavy AI compute happens via hosted API, not on the Nexus
+server itself, so a modest VPS suffices — the same value-density logic
+applied to hardware now applied to infrastructure. One Postgres instance
+with pgvector replaces a separate vector database service. One agent
+first keeps Rule 1 enforceable — building six agents before Phase 0
+proves even one would be pure speculative cost.
+**Alternatives considered:** Kubernetes-class orchestration (rejected —
+unjustified complexity at this scale); a dedicated vector database
+(rejected — no measured need yet); building the full agent roster upfront
+(rejected — contradicts Rule 1 and the Phase 0 gating already established
+for the business model).
+**Cost impact:** ~$4.50/month server cost, feeds directly into
+HELIX_ROI_STRATEGY.md's operating-cost term.
+**Future implications:** upgrade triggers are explicit and load-based
+(see SERVER_HARDWARE_SPECIFICATION.md, DATABASE_ARCHITECTURE.md) — no
+preemptive scaling.
+
+---
+
+## D-011 — Excluded autonomous trading/crypto income generation; declined to fabricate income projections
+
+**Date:** 2026-07-15
+**Decision:** HELIX will not train or deploy an agent whose function is
+autonomous day trading or cryptocurrency trading for guaranteed income.
+Declined to provide specific weekly/4-week income projections; built the
+reporting system/template instead, to be populated with real figures once
+Phase 0 produces a client.
+**Reasoning:** no trading system can reliably guarantee returns — most
+retail day traders lose money over time, and this was already excluded by
+the original master document's own instruction to avoid unrealistic
+guaranteed-profit assumptions. Fabricating specific income numbers before
+a niche, client, or pricing exists would present false confidence as
+research, exactly the failure mode already avoided when the business
+niche itself was left unfabricated (D-008). Business outreach and selling
+remain fully in scope — they fit the locked service-business model
+directly and are reversible-tier (drafts, not autonomous sends).
+**Alternatives considered:** providing "ballpark" numbers with heavy
+caveats — rejected; a caveated fabricated number is still a fabricated
+number and risks being acted on as if it were real.
+**Cost impact:** none.
+**Future implications:** the weekly/4-week ROI report (HELIX_ROI_STRATEGY.md
+Section 4) populates with real data starting the first week a Phase 0
+client exists — no projection model to build or maintain in the meantime.
+
+---
+
+## D-012 — Checkpoints 6 (HELIX OS) and 7 (HELIX SENTINEL) closed
+
+**Date:** 2026-07-15
+**Decision:** Qt/QML selected for HELIX OS over Electron (lighter ARM
+footprint); command-bar pattern over chat or voice (matches keyboard-first
+input, no new hardware); Authorization Center given its own persistent
+top-level screen rather than living in dismissible notifications;
+WireGuard selected for admin/DB access only, not business API traffic
+(already authenticated via secure element).
+**Reasoning:** each choice ties directly to a decision already locked in
+an earlier checkpoint (touch/keyboard input model, secure-element
+authentication, spend guardrails) rather than being decided in isolation
+— see each file's own reasoning section for detail.
+**Notable finding:** THREAT_MODEL.md identifies the Human Authorization
+Gate itself as the most solo-operator-specific attack surface — an
+attacker who social-engineers the owner's approval doesn't need to defeat
+any technical control. Mitigation is procedural (richer context in the
+Authorization Center UI, not just Approve/Deny), logged as a requirement
+flowing from security analysis back into the UI checkpoint.
+**Alternatives considered:** Electron for HELIX OS (rejected, heavier
+footprint); VPN-tunneling all business traffic (rejected, redundant given
+existing authentication); dedicated secrets-management service (rejected
+at this scale, per proportionate-security principle).
+**Cost impact:** none — architecture decisions only.
+**Future implications:** Checkpoints 6 and 7 closed. Remaining: Checkpoint
+8 (08_HELIX_NETWORK_INFRASTRUCTURE) and Phase 4 business-automation
+checkpoints once Phase 0 names a niche.
+
+---
+
+## D-013 — Checkpoint 8 closed; Phase 0 execution steps added
+
+**Date:** 2026-07-15
+**Decision:** Closed Checkpoint 8 (6 files). Added a concrete Phase 0
+execution checklist to HELIX_BUSINESS_MODEL.md (Section 6) — operationalizes
+the niche-selection criteria into an actual weekly process, without
+naming the niche itself.
+**Reasoning:** GLOBAL_CONNECTIVITY_PLAN.md documents that MK1.0 is
+WiFi/hotspot-dependent, not truly cellular-independent, since no cellular
+module is in the lean BOM — stated plainly rather than left implied by
+"portable" branding elsewhere. LATENCY_OPTIMIZATION.md identifies hosted
+model inference, not network transit, as the real latency bottleneck —
+prevents wasted effort on network tuning that wouldn't move the number
+that matters. CLOUD_INTEGRATION.md and NETWORK_MONITORING.md both
+recommend against adding services (object storage, full observability
+stack) unjustified at one-server scale, extending the value-density
+principle to infrastructure choices.
+**Alternatives considered:** adding a cellular module now (rejected, no
+Phase 0 data yet showing it's needed); full observability stack
+(rejected, disproportionate at this scale).
+**Cost impact:** none — architecture and process documentation only.
+**Future implications:** Checkpoints 9 onward genuinely require Phase 0's
+niche answer to proceed without fabricating content — further planning
+work should wait on that, or focus on running Phase 0 itself (Section 6
+of HELIX_BUSINESS_MODEL.md), rather than speculative further
+documentation.
+
+---
+
+## D-014 — Phase 0 niche confirmed: electronics/hardware BOM consulting
+
+**Date:** 2026-07-15
+**Decision:** Confirmed niche as electronics/hardware BOM and
+component-selection consulting for small hardware makers/startups.
+Extended the falsification window from 90 to 120 days given a confirmed
+cold start. Scoped the first HELIX CORE agent to this niche. Drafted
+initial outreach (two variants: direct campaign outreach, community post).
+**Reasoning:** scored the owner's six stated knowledge domains (AI,
+self-defense, reselling, math, computing, electronics) plus one additional
+trait observed directly in this project (process/falsifiability rigor)
+against the five criteria in HELIX_BUSINESS_MODEL.md Section 4. AI and
+computing failed on cold-start reachability (market saturation); self-
+defense had an unresolved personal-skill-vs-B2B-consulting gap; reselling
+was excluded by the owner directly; electronics was the only candidate
+with demonstrated evidence (not just self-report) for Criterion 1, drawn
+directly from this project's own component-selection and conflict-
+catching work.
+**Alternatives considered:** proceeding with the original 90-day window
+despite the confirmed cold start — rejected, would repeat the false-
+confidence error already avoided in D-008/D-011.
+**Cost impact:** none — the free-review go-to-market approach has zero
+cost beyond the owner's time.
+**Future implications:** Checkpoint 9 (09_BUSINESS_AUTOMATION_SYSTEMS) can
+now be scoped concretely, once outreach produces real signal. Weekly
+Phase 0 check-ins begin once outreach is actually sent.
+
+---
+
+## D-015 — Multi-business candidate portfolio added; numbering error caught and fixed
+
+**Date:** 2026-07-15
+**Decision:** Per direct request, researched and added a queue of five
+additional durable AI business categories beyond the active electronics
+niche (fraud/anomaly detection, supply chain/inventory, predictive
+maintenance, cybersecurity monitoring, customer-service automation,
+healthcare admin) to HELIX_BUSINESS_MODEL.md Section 7. Sequenced them
+by durability evidence and skill fit rather than treating all as
+simultaneously actionable.
+**Reasoning:** grounded in 2026 enterprise AI adoption data (McKinsey,
+Gartner, IDC figures cited in-conversation) plus pre-2020 use-case
+history for fraud detection and predictive maintenance specifically, to
+distinguish durable categories from current hype-cycle ones. Declined to
+provide a 2045 forecast or a predictable-income claim — no source can
+reliably forecast 19 years out, and predictability was already excluded
+as a claim this project makes (D-011). Sequential validation (one niche
+proven before the next starts) preserves the existing agent-addition rule
+in AI_AGENT_FRAMEWORK.md rather than diluting solo-operator effort across
+parallel cold-outreach campaigns.
+**Error caught during this update:** an earlier str_replace edit deleted
+the "Falsification Condition" section heading while inserting the new
+portfolio section, leaving its body text orphaned with no header, and
+left a numbering gap (jumped 6 to 9, skipping 7 and 8). Both the missing
+heading and the numbering gap were caught by direct inspection before
+packaging, corrected, and all cross-references in HELIX_ROI_STRATEGY.md
+and HELIX_BUSINESS_MODEL.md itself updated to match.
+**Alternatives considered:** running multiple niches' outreach in
+parallel — rejected, dilutes a solo operator's limited outreach effort
+across untested channels rather than producing one clear result.
+**Cost impact:** none.
+**Future implications:** electronics BOM consulting remains the active
+Phase 0 test; fraud/anomaly detection advisory is next in queue once it
+clears its ROI gate (or the 120-day window expires without one, per
+Section 8).
+
+---
+
+## D-016 — Declined pivot to autonomous/near-autonomous trading infrastructure
+
+**Date:** 2026-07-15
+**Decision:** Declined a directed request to build a fine-tuned model and
+execution infrastructure for algorithmic/crypto trading (statistical
+arbitrage, perpetual funding arbitrage, forex mean-reversion, "alpha
+signal" monetization), presented via two externally-sourced documents
+proposing specific annualized ROI ranges (15%-150%+, some up to 1000%)
+with a "human-in-the-loop" design described as a ~5-minute daily signature
+step.
+**Reasoning:** this is the same category already excluded in D-011, now
+reframed with denser technical vocabulary rather than new justification —
+no trading system can reliably guarantee the returns asserted, and the
+documents provide no methodology or citation behind the specific figures.
+More importantly, the proposed "HITL" design — reducing human review to a
+rapid signature over agent-staged trade payloads — directly matches the
+failure mode already identified in THREAT_MODEL.md Section 2 (the
+Authorization Gate is only as strong as genuine human evaluation, not
+formal sign-off speed). Building a system optimized for fast approval
+rather than informed approval would be constructing that vulnerability
+deliberately rather than defending against it.
+**Alternatives considered:** building only the "analysis" half without
+execution — remains genuinely available if wanted, as a decision-support
+tool with no return promises, consistent with the existing
+predictive-analytics-style queue entry. Treating the documents' framing as
+credible because it was sourced from other AI output or used sophisticated
+terminology — rejected; neither changes the underlying claim.
+**Cost impact:** none.
+**Future implications:** this boundary applies regardless of how future
+requests in this project are framed (new terminology, new sourcing,
+renewed urgency) — a correct prior decision is not reopened by restating
+the same underlying ask differently.
+
+---
+
+## D-017 — Commercial Rollout Gate formalized; no live outreach until sandbox-validated
+
+**Date:** 2026-07-15
+**Decision:** No live external communication (outreach, client contact,
+revenue-generating operation) until: (1) backend infrastructure
+(Checkpoints 4-8) is not just documented but actually implemented and
+running, (2) the first agent (BOM-review, per D-014) passes sandboxed
+testing against synthetic/sample data with consistently positive metrics
+(AI_TESTING_FRAMEWORK.md's success rate/cost/latency criteria), and (3)
+the project owner explicitly authorizes the transition to controlled
+live rollout. Revenue from that rollout is earmarked as the primary
+capital source for the physical HELIX Terminal MK1 build, deferring
+hardware spend until the business validates itself.
+**Reasoning:** direct project-owner instruction, and a sound one — it
+resolves the hesitation raised about live outreach by removing the live
+step entirely until something is actually proven. It also surfaces an
+honest gap: Checkpoints 4-8 are architecture and documentation, not
+running code. Checkpoint 10 (10_SOFTWARE_DEVELOPMENT) — actual
+implementation — has not been started until this decision. That work
+begins now, scoped to what can be genuinely sandbox-tested with synthetic
+data, with the LLM-calling portion clearly marked as requiring the
+project owner's own API credentials to run live, which is not something
+to paste into this conversation.
+**Alternatives considered:** treating architecture documentation as
+equivalent to "backend finalized" — rejected; a design document is not a
+tested system, and claiming otherwise would be the same false-confidence
+problem already declined elsewhere in this project.
+**Cost impact:** none yet — implementation work uses the same
+already-budgeted server/API costs (SERVER_HARDWARE_SPECIFICATION.md,
+AI_MODEL_STRATEGY.md), not incurred until actually deployed.
+**Future implications:** Checkpoint 9 (real client, real revenue) stays
+blocked until this gate clears. Checkpoint 10 begins now.
+
+---
+
+## D-018 — Checkpoint 10 started: first working code, sandbox-tested
+
+**Date:** 2026-07-15
+**Decision:** Implemented and ran real code for the first time in this
+project — BOMReviewAgent (deterministic budget/power/physical-fit checks
++ a structurally-complete but uncredentialed LLM synthesis method),
+an orchestrator skeleton (FastAPI, matching API_SYSTEM_DESIGN.md's
+routing shape), and two sandbox tests, both passing, both against
+fabricated synthetic data.
+**What was actually verified:** the deterministic review logic correctly
+catches budget overage, power overage, and physical width conflicts on a
+synthetic BOM built specifically to contain all three; the orchestrator
+correctly routes a request to the agent and returns structured findings,
+tested in-process via FastAPI's TestClient (no real network port opened,
+no external service contacted); malformed input is correctly rejected.
+**What was not verified, and why:** the LLM synthesis layer is
+unexercised — it requires a real Anthropic (or configured provider) API
+key, which is intentionally not present in this sandbox and should never
+be pasted into a chat conversation to test. The deterministic layer above
+is complete and valid on its own; synthesis adds narrative framing on top
+of it once the owner's own deployment supplies real credentials.
+**Alternatives considered:** waiting to write any code until the full
+Nexus stack (Postgres, Redis, Caddy, real auth) is deployed — rejected;
+testing the agent and routing logic in isolation first, per D-017's own
+incremental-and-sandboxed framing, catches logic errors before they're
+compounded by infrastructure complexity.
+**Cost impact:** none — local sandbox execution only.
+**Future implications:** next code-level work is wiring the deterministic
+agent to a real LLM client once the owner supplies credentials in their
+own environment (not here), then the database/auth layers, per
+CONTAINERIZATION_PLAN.md's staged deployment — still entirely pre-live,
+per the Commercial Rollout Gate in D-017.
+
+---
+
+## D-019 — Auth + audit logging implemented; real thread-safety bug caught and fixed
+
+**Date:** 2026-07-15
+**Decision:** Implemented AUTHENTICATION_SYSTEM.md's signature-verification
+flow (software-simulated secure element — real hardware equivalent is the
+ATECC608B, not present here) and AI_SAFETY_CONSTRAINTS.md's audit logging
+(SQLite standing in for production Postgres), wired both into the
+orchestrator, sandbox-tested.
+**What was verified, for real:** valid signed requests are accepted;
+tampered signatures, unknown terminal IDs, and revoked terminals are all
+correctly rejected with 401; every attempt (success and failure) is
+written to the audit log with the correct authorization tier.
+**Real bug caught during testing:** the first test run failed with a
+genuine SQLite cross-thread error — FastAPI's TestClient executes request
+handlers in a worker thread pool, and SQLite forbids using a connection
+from a different thread than the one that created it by default. Fixed
+with `check_same_thread=False` plus an explicit lock to keep writes
+serialized rather than just silencing the error. Documented as a
+sandbox-only fix — production Postgres via a connection pool
+(DATABASE_ARCHITECTURE.md) doesn't have this constraint at all.
+**Alternatives considered:** none — this was a correctness bug, not a
+design choice with tradeoffs.
+**Cost impact:** none — local sandbox execution only.
+**Future implications:** LLM synthesis wiring remains the next real gap,
+blocked on the owner supplying credentials in their own environment.
+
+---
+
+## D-020 — Missing folders caught: full 16-folder tree now physically exists
+
+**Date:** 2026-07-15
+**Decision:** Created all 7 top-level folders from the original project
+tree that had never been created (03, 09, 11, 12, 13, 14, 15), each with
+a STATUS.md explaining why it's empty (deferred / blocked / not started
+/ ongoing) rather than leaving them silently absent.
+**Reasoning:** direct project-owner catch — the delivered zip only ever
+contained folders that had actual content, which meant 7 folders from the
+owner's own original tree simply didn't exist in the archive. An absent
+folder is ambiguous (forgotten? deferred? blocked?) in a way a present
+folder with an explicit status is not — this matters especially for
+continuity into a new conversation window, where the only ground truth
+is what's physically in the zip.
+**Alternatives considered:** leaving folders absent and relying on
+HELIX_PROJECT_ROADMAP.md/HELIX_MASTER_DOCUMENT.md to explain their status
+in prose — rejected; a new reader (human or a new Claude session)
+shouldn't have to cross-reference a separate document to learn that an
+entire folder's absence was intentional.
+**Cost impact:** none.
+**Future implications:** the full original tree (16 top-level folders)
+now physically exists in every future archive of this project, regardless
+of how much content each holds.
+
+---
+
+## D-021 — Reprioritized: business/AI model over cyberdeck hardware; autonomy assessed across three dimensions, not one composite number
+
+**Date:** 2026-07-15
+**Decision:** Project owner reprioritized — cyberdeck hardware is
+secondary; business operation and the AI model running it are primary.
+Consistent with the project's own original stated order ("completing
+everything here before we touch the physical world," turn 1). Declined
+to provide a single composite "% autonomous" figure when asked; provided
+a three-dimension breakdown instead (architecture/design: 100%,
+implementation: ~45%, real-world validation: 0%).
+**Reasoning:** a single composite number would have blended "fully
+specified" with "actually coded" with "proven to work unattended against
+a real client" — three facts with very different evidentiary bases, and
+collapsing them would hide that the most important one (real-world
+validation) is genuinely at zero, by design (Commercial Rollout Gate,
+D-017), not by technical shortfall. Also corrected the framing that full
+completion means zero human involvement: the Human Authorization Gate
+(AI_AGENT_FRAMEWORK.md) is a permanent design feature, not a temporary gap
+that "100%" removes — what implementation completion actually removes is
+the need for constant real-time presence, replaced by periodic
+asynchronous approval, which is a different and more honest target than
+"no human ever."
+**Alternatives considered:** providing a single fabricated composite
+percentage — rejected as the same false-precision problem already
+declined for income projections (D-011) and niche fabrication (D-008).
+**Cost impact:** none.
+**Future implications:** track implementation percentage (~45% currently)
+as the primary completion metric going forward, since it's the only one
+of the three dimensions that moves with further building rather than
+requiring an owner decision (rollout) or already being done (architecture).
+
+---
+
+## D-022 — Real PostgreSQL + pgvector implemented; permissions bug caught and fixed
+
+**Date:** 2026-07-15
+**Decision:** Replaced the SQLite stand-in with a real, running PostgreSQL
+16 instance and pgvector 0.6.0 extension. Wrote and ran the actual
+production schema (001_initial_schema.sql) — clients, agent_actions
+(with a database-level CHECK constraint on authorization tier, not just
+app-level validation), deliverables, memory_embeddings, evolution_log —
+against the live database, plus an HNSW vector index.
+**Real bug caught:** the migration was run as the postgres superuser,
+which meant the tables came out owned by postgres, not the helix_app
+application role the code actually connects as — a genuine "permission
+denied" error on first real query, not a hypothetical. Fixed with
+explicit GRANT statements, added directly into the migration file so a
+fresh deploy doesn't repeat it, and noted the cleaner long-term fix (run
+migrations as the application role itself).
+**What was verified:** the CHECK constraint on authorization_tier rejects
+an invalid value at the database level (defense in depth beyond app-level
+checks); pgvector's cosine similarity search runs correctly against
+synthetic embeddings and returns ranked results.
+**Cost impact:** none — local sandbox instance.
+**Future implications:** implementation percentage moves up from the
+D-021 estimate now that the real database (not a stand-in) is running
+and tested. LLM synthesis wiring remains the one piece requiring the
+owner's own credentials, in their own environment.
+
+---
+
+## D-023 — Real bug found via field testing on the owner's own machine: .env location wrong
+
+**Date:** 2026-07-15
+**Decision:** Fixed a bug where the `.env` file, placed exactly where
+instructed (SERVER_APPLICATIONS/), was never actually found by
+`bom_review_agent.py` — synthesis stayed skipped even with a real key
+present. Fixed by loading `.env` from an explicit path pinned to
+bom_review_agent.py's own file location (AI_CODE/) instead of relying on
+python-dotenv's default stack-walking search. Moved .env.example to
+AI_CODE/ to match.
+**Root cause:** python-dotenv's default `load_dotenv()` searches upward
+from the calling script's directory through parent folders — it does not
+search sideways into a sibling folder. AI_CODE/ and SERVER_APPLICATIONS/
+are siblings under 10_SOFTWARE_DEVELOPMENT/, so a `.env` in
+SERVER_APPLICATIONS/ was structurally unreachable from AI_CODE/'s
+perspective, regardless of what value was in it. My own earlier sandbox
+test happened to pass because I created the test .env directly inside
+AI_CODE/ — the same directory as the code — which accidentally matched
+the correct location without exposing the actual instruction bug. The
+real field test (project owner running from SERVER_APPLICATIONS/, per my
+own instructions) is what exposed it.
+**Verification:** reproduced the exact failure in this sandbox using the
+owner's own directory/invocation pattern before touching any code, then
+confirmed the fix resolves it in that same reproduction, then re-ran all
+three existing test suites to confirm no regression.
+**Alternatives considered:** telling the user to always run scripts from
+a specific directory instead — rejected, more fragile and easier to get
+wrong again than fixing the code to not depend on invocation location at
+all.
+**Cost impact:** none.
+**Future implications:** this is a good example of why sandbox testing
+in an isolated environment doesn't fully replace testing in the actual
+conditions a user will run in — logged as a general caution for the rest
+of this project, not just this one bug.
+
+---
+
+## D-024 — Second real bug found: UTF-8 BOM silently broke .env parsing
+
+**Date:** 2026-07-15
+**Decision:** Built diagnose_env.py to get concrete evidence rather than
+guess a third time after D-023's fix didn't resolve the issue. Tested it
+myself against four realistic failure scenarios (correct file, hidden
+.txt extension, BOM present, quoted value) before sending it to the
+project owner. Found a real bug in my own diagnostic's test setup first
+(shell printf doesn't interpret \x hex escapes the way bash's builtin
+does — a testing-methodology bug, corrected by writing raw bytes via
+Python instead), then found the actual bug: a UTF-8 byte-order-mark
+(BOM), which Windows Notepad commonly adds when saving "UTF-8" files,
+silently broke python-dotenv's parsing of the first line. The file looks
+completely correct when opened in a text editor -- the BOM is invisible
+-- but corrupts the ANTHROPIC_API_KEY variable name so it never matches.
+**Fix:** load_dotenv() now passed encoding="utf-8-sig", which transparently
+strips a BOM if present and behaves identically when absent -- verified
+against both cases before and after the fix, plus a full re-run of all
+three existing test suites to confirm no regression.
+**Alternatives considered:** telling the user to re-save the file in a
+different editor/encoding -- rejected in favor of making the code robust
+to the artifact instead, since it's a common enough Windows occurrence
+that the fix should live in the code, not in a list of user instructions
+to remember.
+**Cost impact:** none.
+**Future implications:** if the owner's real key still isn't detected
+after this fix, the diagnostic script's own output (not another guess)
+is the next source of truth -- it now correctly surfaces path, BOM
+status, key-line presence, and value length without ever printing the
+actual key.
+
+---
+
+## D-025 — Actual root cause found: python-dotenv was never installed
+
+**Date:** 2026-07-15
+**Decision:** diagnose_env.py's own output gave a direct, unambiguous
+answer: `python-dotenv` was not installed in the project owner's Python
+environment. Reproduced this exact condition in this sandbox
+(uninstalled python-dotenv, ran the same test) and got the identical
+"SYNTHESIS SKIPPED" message the owner had seen from their very first
+attempt — confirming this was the actual cause all along, not the
+folder-location bug (D-023) or the BOM handling (D-024).
+**Why it took three rounds to find:** D-023 and D-024 were both real,
+independently-worth-fixing bugs, but neither was the specific thing
+blocking this owner's case — bom_review_agent.py's own
+`try/except ImportError: pass` around the dotenv import silently
+swallows a missing-package error and falls through to checking
+os.environ directly, which was never populated. That silent fallback is
+reasonable production behavior (don't crash the whole agent over a
+missing optional dependency) but made this specific failure mode quiet
+and easy to misattribute to something more exotic.
+**Fix:** direct instruction to run
+`pip install -r SERVER_APPLICATIONS/requirements.txt`, installing
+python-dotenv and anthropic (and everything else needed) in one pass
+rather than surfacing missing packages one at a time.
+**Verification:** reproduced the exact symptom by uninstalling
+python-dotenv in this sandbox before concluding this was the cause, not
+just inferring it from the diagnostic text alone.
+**Cost impact:** none.
+**Future implications:** none of the three bugs found this session
+(D-023, D-024, D-025) contradict each other -- all three were real and
+are now fixed. The lesson worth carrying forward: when a diagnostic
+script gives a direct answer, verify it by reproduction before acting on
+it, same discipline applied to every other claim in this project.
+
+---
+
+## D-026 — Pivoted to local model deployment; corrected "outmatch all frontier models" framing
+
+**Date:** 2026-07-15
+**Decision:** Superseded the hosted three-tier API plan (AI_MODEL_STRATEGY.md
+Section 3, kept for reference) with a local deployment default: Qwen3 8B,
+Q4 quantized, via Ollama, on the owner's RTX 4060 (8GB VRAM). Fine-tuning
+via a rented cloud GPU (not locally — 8GB is insufficient even with
+QLoRA), resulting weights run locally afterward at zero ongoing cost.
+**Reasoning:** direct owner priority to eliminate API keys/subscriptions
+and maximize control — a legitimate, achievable goal that fits the
+existing model-agnostic abstraction layer without requiring architecture
+changes. Corrected a specific framing before building toward it: a
+solo-operator fine-tuned model cannot realistically "outmatch all
+frontier models, open or closed" in general capability — training from
+scratch is infeasible and even fine-tuning won't produce general
+superiority. What's real and was built toward instead: a small model
+fine-tuned specifically on the BOM-review synthesis task can genuinely
+outperform a generic frontier model *at that one narrow job*, since the
+deterministic checks (already built) handle the hard analytical work and
+the model's only job is narrative synthesis of already-correct findings.
+**Alternatives considered:** running multiple simultaneously-loaded local
+models for tiered routing (rejected — needs 24GB+, not available on
+8GB); training from scratch (rejected outright, infeasible at any
+individual scale).
+**Cost impact:** removes ongoing per-token API cost entirely; adds a
+one-time rented-GPU fine-tuning cost (hours, not months) and the
+owner's own hardware (already owned).
+**Future implications:** AI_MODEL_STRATEGY.md Section 6 is now the
+current default; Sections 3-4 kept as superseded reference given the
+abstraction layer makes either path valid.
+
+---
+
+## D-027 — Job-vs-business 120-day comparison: honest structural answer, not a fabricated business figure
+
+**Date:** 2026-07-15
+**Decision:** Declined to provide a matching "business profit" figure
+against the computed job-income figure ($4,371-$5,143 gross before tips,
+30 hrs/week at $8.50-$10/hr over 120 days). Gave a structural explanation
+instead: the business's own 120-day Phase 0 window (HELIX_BUSINESS_MODEL.md)
+was designed around validation (free reviews building a case study) not
+income generation, so $0-low-revenue is the expected outcome in this
+specific window by design, not by failure.
+**Reasoning:** fabricating a business-side number to match the job-side
+number would repeat the exact error already declined in D-011, D-016,
+and D-021 — false precision on something with zero real data behind it.
+The honest, useful answer was structural: explain *why* the two numbers
+aren't comparable in this window, which directly serves the owner's
+stated goal of deciding where to focus.
+**Alternatives considered:** giving a hedged/caveated business estimate
+anyway — rejected, a caveated fabricated number is still fabricated, per
+the same reasoning in D-011.
+**Cost impact:** none.
+**Future implications:** the honest comparison likely favors the job for
+guaranteed short-term income during Phase 0 specifically — this does not
+mean abandoning the business, since a converted retainer client scales
+in a way hourly wages don't; it means expectations for *this specific
+window* should be set accordingly.
+
+---
+
+## D-028 — Real code implementation of the LLM abstraction layer; orchestrator wiring gap closed
+
+**Date:** 2026-07-15
+**Decision:** Implemented llm_client.py — the LLMClient abstraction
+described in AI_MODEL_STRATEGY.md since D-008, now real code with two
+backends (LocalOllamaLLMClient as default per D-026, AnthropicLLMClient
+as an explicit fallback). Found and fixed a real gap: the orchestrator's
+/task/bom-review endpoint only ever called the deterministic review, never
+synthesize_recommendations — the full agent pipeline had never actually
+been wired end-to-end despite both halves existing separately.
+**What was verified:** backend selection logic (local by default, hosted
+via HELIX_LLM_BACKEND=hosted); the real "Ollama unreachable" error path
+(genuinely tested — nothing listens on that port in this sandbox, this
+isn't simulated); the hosted client's "no key" path; and, after the
+orchestrator fix, the complete request-to-response pipeline including
+synthesis, confirmed via the full test suite (4 suites, all passing).
+**Honest limitation stated plainly:** this sandbox cannot reach
+ollama.com (confirmed via direct request, 403) — real Qwen3 output can
+only be verified on the owner's own machine, where Ollama actually runs.
+Everything up to that boundary is genuinely tested here; the boundary
+itself is not papered over.
+**Cost impact:** none.
+**Future implications:** next real-world step is the owner running this
+against actual local Ollama + Qwen3 8B and reporting back what comes out
+— that's the point where "SYNTHESIS SKIPPED/UNREACHABLE" finally becomes
+real model output.
+
+---
+
+## D-029 — Two-phase local model plan: CPU-only now, GPU later, given zero shareable VRAM
+
+**Date:** 2026-07-15
+**Decision:** Switched HELIX's local model from qwen3:8b (GPU) to
+phi4-mini (CPU-only, forced via per-request num_gpu=0) for the current
+phase, given owner confirmation that SuperMind currently claims all
+available VRAM on the shared RTX 4060 with no shareable headroom. Kept
+qwen3:8b as the documented later-phase target once SuperMind moves to
+its own dedicated hardware (owner's stated existing plan).
+**Reasoning:** the earlier keep_alive-based coexistence fix (D-028
+follow-up) assumed some shareable headroom existed to time-share; a
+genuinely zero-headroom situation makes that moot, since HELIX's model
+can't load into VRAM that has none free. CPU inference touches zero
+VRAM by construction, so it cannot conflict with SuperMind regardless of
+how much of the 8GB SuperMind holds — this is the correct fix for the
+actual constraint stated, not a smaller version of the previous fix.
+**Respecting a stated boundary:** the owner declined to detail
+SuperMind's internals; proceeded on the one fact given (VRAM reaches
+capacity quickly, no shareable room) without pressing further, per their
+explicit request.
+**Alternatives considered:** a smaller GPU-resident model (e.g. a more
+aggressively quantized Qwen3 variant) — rejected, still competes for the
+same zero-headroom VRAM; global OLLAMA_NUM_GPU=0 server setting —
+rejected in favor of a per-request option={"num_gpu": 0}, since a global
+setting would also force SuperMind's own calls to CPU if they share the
+same Ollama instance, which is not the goal.
+**Verification:** confirmed "phi4-mini" (no hyphen) as the exact,
+current official Ollama library tag before writing it into code or
+instructions, same rigor as the qwen3:8b confirmation in D-026. Re-ran
+the full 4-suite test after the change; all pass.
+**Cost impact:** none — same owned hardware either way; accepted
+capability/speed trade-off is explicit and temporary.
+**Future implications:** OLLAMA_SETUP_GUIDE.md now documents both
+phases explicitly, including the exact two-line change (model="qwen3:8b",
+force_cpu=False) to flip to GPU mode once SuperMind is off this desktop.
+
+---
+
+## D-030 — First real local model output achieved; two real bugs found on first live run, both fixed
+
+**Date:** 2026-07-15
+**Decision:** Owner ran all three sandbox tests on their actual machine
+for the first time. Milestone: test_bom_review_sandbox.py produced real,
+correct phi4-mini synthesis output — grounded in the actual submitted
+numbers ($100 budget, 5W limit, 25.0mm height), no invented figures.
+First genuine local AI output this project has produced.
+**Bug 1 — test_llm_client_sandbox.py failed its own assertion:** the
+test asserted the Ollama call must return an "UNREACHABLE"/"UNAVAILABLE"
+message, written assuming this sandbox's environment (no real Ollama)
+was the only case. On the owner's machine, Ollama was actually reachable,
+so a real response came back instead, breaking the too-narrow assertion.
+Fixed to correctly recognize both outcomes as valid rather than forcing
+one.
+**Bug 2 — real, missing dependency:** orchestrator_sandbox.py failed with
+`ModuleNotFoundError: No module named 'cryptography'` on the owner's
+machine. auth.py has imported cryptography directly since it was first
+built; requirements.txt was written afterward and I never added it —
+a genuine oversight, not a setup mistake on the owner's end. Fixed by
+adding it to requirements.txt.
+**Verification:** did not just assert the requirements.txt fix was
+correct — built a genuinely isolated virtual environment (calling venv
+binaries directly, since this shell doesn't support `source`/`activate`,
+which silently invalidated the first verification attempt and was caught
+before being reported as fixed) with only requirements.txt installed,
+and re-ran all three of the owner's exact tests inside it. All pass.
+**Cost impact:** none.
+**Future implications:** requirements.txt is now confirmed complete on
+a clean install. Next step is the owner re-running test_llm_client_sandbox.py
+and test_orchestrator_sandbox.py with these two fixes.
+
+---
+
+## D-031 — Full pipeline verified end-to-end on real owner hardware; clean-case test added to close a real coverage gap
+
+**Date:** 2026-07-15
+**Decision:** All three sandbox tests now pass on the owner's actual
+machine: real Ollama connectivity, real phi4-mini synthesis grounded
+correctly in submitted figures, and the full orchestrator pipeline
+(auth, deterministic review, LLM synthesis, audit logging) working
+end-to-end with zero API cost and zero external dependency. This is the
+implementation dimension (D-021's three-part breakdown) substantially
+more complete than the ~45% estimate, now verified on real hardware
+rather than only in this sandbox.
+**Real gap closed:** every test to this point used a deliberately broken
+synthetic BOM to verify problem detection. Added
+test_bom_review_clean_case_sandbox.py, a BOM built to fit comfortably
+within every constraint, to verify the agent does not produce false-
+positive findings on legitimately good work — a false alarm is as real a
+failure mode as a missed problem, and it had never been tested. Confirmed
+in this sandbox: zero critical/warning findings on the clean case.
+**What's still open before Commercial Rollout Gate (D-017) discussion:**
+"consistently positive metrics" implies more than one successful run —
+recommend running both the broken-case and clean-case tests together a
+few times, plus varying the synthetic inputs further, before treating the
+implementation dimension as fully proven. Not a new gate, just what
+"consistently" honestly requires.
+**Cost impact:** none.
+**Future implications:** database layer (tested in this sandbox against
+real Postgres, not yet on the owner's own machine) remains the one piece
+of Checkpoint 10 unverified on real owner hardware specifically.
+
+---
+
+## D-032 — Real model quality issue found and fixed; delivery format changed to delta-only
+
+**Date:** 2026-07-15
+**Decision 1:** Fixed a genuine phi4-mini quality issue found in the
+clean-case test: the model flagged a battery pack's 0W power draw as
+"unusual," incorrectly reasoning as if a power-source component should
+consume power like an active one. Added an explicit clarification to the
+synthesis prompt in bom_review_agent.py distinguishing power-source
+components (category='power') from power-consuming ones. Not a test
+failure (deterministic assertions all passed) but a real synthesis-
+quality gap worth catching before a real client sees it.
+**Decision 2:** Changed project delivery format per direct owner
+request — from always resending the full HELIX_PROJECT archive (every
+file, every turn) to delta-only packages containing just new/changed
+files, with the exact HELIX_PROJECT/... path preserved per file so
+extraction overwrites the right location with no ambiguity. This
+reverses the original full-archive rule from earlier in the project
+(that rule existed to prevent confusion from individually-named loose
+files with unclear destinations) — the delta-zip approach preserves that
+same clarity (full paths, zip not loose files) while cutting the
+resend-everything overhead the owner flagged as the actual problem now
+that the project has grown past 100 files. Memory updated to reflect
+this as the new standing rule.
+**Alternatives considered:** reverting fully to individual loose files —
+rejected, that was the original problem being solved for; keeping
+full-archive delivery — rejected per direct instruction and reasonable
+given project size.
+**Cost impact:** none.
+**Future implications:** going forward, only changed files ship, each
+at its exact original path, in a small zip — full archive still
+producible on request if ever needed for a fresh full sync.
+
+---
+
+## D-033 — Recalibrated for realistic BOM scale; a real false-positive bug found and fixed in the process
+
+**Date:** 2026-07-15
+**Decision:** Per direct owner question ("are these tests very basic?"),
+expanded Component with fields that add real analytical value: quantity
+(fixes a genuine gap — cost/power totals were silently assuming
+quantity=1 per line, meaning 20x of a $0.05 part was being totaled as
+$0.05, not $1.00), manufacturer, manufacturer_part_number, and
+lead_time_days (feeding a new supply-chain risk check — parts with
+90+ day lead times are flagged, a real and common cause of hardware
+schedule slips). Built a new 18-line-item realistic-scale test modeled
+on an actual small IoT device BOM (MCU, power management, sensors,
+connectors, and the passive components every prior test omitted
+entirely), replacing the 4-5-item toy BOMs used until now.
+**Real bug found via this recalibration, not theory:** the physical-fit
+height check summed every component's height as if all of them stack
+vertically — a reasonable proxy for 4-5 major components, but produces
+a false alarm at real scale, where most parts (resistors, capacitors)
+mount flat, side-by-side, on the same PCB layer, not stacked on top of
+each other. The 18-item test immediately surfaced this as a false
+"44.7mm exceeds 15mm enclosure" warning. Fixed by checking the tallest
+single component instead of summing all of them, with the finding text
+now explicit that true multi-layer stack analysis needs board-layer
+data this BOM format doesn't carry — avoids replacing one false
+precision with another.
+**Verification:** full regression run across all 4 existing test suites
+plus the new one — all pass, including hand-computed quantity-math
+assertions (not just "did it run," but "does 22.29 actually equal what
+you'd get multiplying it out by hand").
+**Alternatives considered:** adding many more "realistic-sounding" BOM
+fields (RoHS compliance, voltage tolerance, package type, datasheet
+links) — deferred; those either need circuit-level data this BOM format
+doesn't have (e.g. voltage tolerance checks need per-net operating
+voltage, not just a parts list) or don't change any actual analysis yet,
+which would be realism for its own sake rather than genuine capability.
+**Cost impact:** none.
+**Future implications:** the height-check fix and quantity-math fix
+both apply retroactively to every future BOM reviewed, not just the new
+test — this was a correctness fix to the agent itself, not just new test
+coverage.
+
+---
+
+## D-034 — First grounded tool-use step: component alternatives lookup, replacing invented recommendations with looked-up ones
+
+**Date:** 2026-07-15
+**Decision:** Built component_lookup_tool.py (mock dataset, clearly
+labeled as a stand-in for a real distributor API integration) and wired
+it into bom_review_agent.py's synthesis step. When a component is
+flagged for a long lead time and has a known manufacturer part number,
+the agent now looks up real (currently mock) alternative parts and
+explicitly instructs the LLM to cite only those looked-up alternatives —
+never to invent its own part numbers or specs.
+**Direct motivation:** the project owner asked for reassurance that
+HELIX's BOM-review capability is on a real path toward replacing, not
+just supplementing, a general chat session with ChatGPT/Grok/Gemini/
+Claude for this specific task. The prior test run itself supplied the
+proof of why this matters: the model fabricated "additional onboard RAM"
+as a justification for the BME280 recommendation — a spec that isn't
+real for that sensor and wasn't in any submitted data. This is not a
+smaller-model problem; any LLM reasoning without grounding will do this.
+The actual differentiator from a generic chat session isn't a smarter
+model, it's tool access a chat session doesn't have — this is the first
+concrete instance of that architecture, not just a description of it.
+**What this is and isn't:** this is a real, tested, working
+implementation of the *pattern* (agent calls a grounded data source,
+LLM is constrained to cite only what it returns). The dataset itself is
+mock — two hand-built entries, clearly labeled as such throughout the
+code. A real distributor integration (Octopart/DigiKey/Mouser API) would
+replace _MOCK_ALTERNATIVES_DB with a live API call behind the same
+lookup_alternatives() interface — same pattern, real data, whenever the
+owner is ready to set up and supply that account's credentials (same
+handling rules as the LLM API key: environment variable, never pasted
+into chat).
+**Verification:** tested the lookup tool in isolation (known MPN returns
+real entries, unknown MPN returns empty list rather than a guess), then
+verified the exact BME280 scenario triggers correctly end-to-end, then
+ran full regression across all 6 test suites — all pass.
+**Alternatives considered:** letting the LLM keep making unguided
+"consider an alternative" suggestions — rejected, this is precisely the
+ungrounded-recommendation problem the owner's question was about.
+**Cost impact:** none for the mock version. A real distributor API
+integration would have its own (typically low or free-tier) cost,
+evaluated when that step is actually taken.
+**Future implications:** this is the concrete first step on the path the
+owner asked about. Next natural extensions in the same direction:
+real distributor API (replacing mock data), then eventually schematic/
+netlist-aware input (enabling "rewiring" guidance) and layout-aware
+input (enabling diagram/layout guidance) — both of those are
+substantially bigger lifts requiring richer input formats than a flat
+BOM list, not next-turn work, but the same grounded-tool-use pattern
+established here is what would make either trustworthy rather than
+another source of invented specifics.
+
+---
+
+## D-035 — API schema was silently behind the agent's own capabilities; found by finally testing the two together
+
+**Date:** 2026-07-15
+**Decision:** Built test_orchestrator_realistic_scale_sandbox.py to close
+a real gap: the 18-item realistic BOM (D-033) and the full orchestrator
+pipeline (auth/audit/synthesis) had only ever been tested separately,
+never together. Running them together immediately surfaced a real bug:
+orchestrator.py's ComponentIn Pydantic model still only had the original
+7 fields — quantity, manufacturer, manufacturer_part_number, and
+lead_time_days were being silently dropped at the HTTP boundary. Result:
+the API returned $21.65 instead of the correct $22.29, and the 112-day
+BME280 lead-time warning never fired at all through the actual API a
+real client would call, even though both worked correctly when calling
+the agent directly in Python.
+**Why this matters more than a typical bug:** D-033's fixes (quantity
+math, lead-time check) were real and tested — but only at the Python/
+agent level. The HTTP API is what an actual deployed terminal or client
+integration would use, and it was silently behind what the agent itself
+could do. This is exactly the kind of gap that only surfaces when two
+previously-separate test paths are actually connected, not assumed
+compatible.
+**Fix:** updated ComponentIn to match Component's full field set, with
+the same defaults for backward compatibility. Updated the test to send
+the full field set and assert both the corrected cost and the lead-time
+warning actually appear in the API response.
+**Verification:** confirmed the bug first (ran the test, saw the wrong
+cost and missing warning), then applied the fix, then re-ran and
+confirmed both issues resolved, then ran full regression across all 7
+test suites — all pass, including the original 7-field orchestrator
+test, confirming backward compatibility.
+**Alternatives considered:** none — this was a straightforward schema
+mismatch, not a design tradeoff.
+**Cost impact:** none.
+**Future implications:** general lesson worth carrying forward
+explicitly: when two components are each tested in isolation, that is
+not the same as testing them together — the realistic-scale BOM and the
+API layer each passed their own tests while the integration between
+them was silently broken.
+
+---
+
+## D-036 — Two real synthesis errors found in a live 18-item run; moved comparison math into deterministic code
+
+**Date:** 2026-07-15
+**Decision:** The full-pipeline realistic-scale run (D-035's test) produced
+synthesis text with two real errors, not style issues: (1) the model
+called the $3.10 Bosch BME680 alternative "slightly cheaper" than the
+$2.40 original BME280 — backwards; the mock data's own note even said
+"higher cost." (2) The model fabricated a lead-time finding for the
+ESP32-S3 module that doesn't exist anywhere in the actual findings, while
+misquoting its price ($3.40 stated vs. $3.20 actual) and comparing it
+against an unrelated sensor alternative as if they were substitutes.
+**Fix:** moved the cost-delta computation and the component-to-
+alternative pairing into Python, computed before the prompt is built —
+the model is now only asked to restate an already-correct comparison
+("$0.70 MORE expensive," computed and verified directly, not left for
+the model to work out), and is explicitly told each alternative applies
+only to the one component listed directly above it, never to be applied
+to another component.
+**Why this matches the project's existing philosophy exactly:** this is
+the same lesson as D-033's quantity-math fix — arithmetic and multi-
+entity bookkeeping are unreliable in LLM free text, small models
+especially, and belong in deterministic code. The model's job stays
+narrowly "phrase this correctly," never "compute this correctly."
+**Also addressed:** owner's separate tone note (stiff phrasing like "per
+HELIX's...guidelines") — added an explicit instruction for a natural,
+professional tone, bundled into the same prompt rewrite since it was a
+low-cost addition alongside the more important fix.
+**Verification:** hand-verified the exact price-delta computation
+($0.70 more expensive, $0.45 cheaper) directly against the mock dataset
+before trusting it, then ran full regression across all 7 test suites —
+all pass.
+**Cost impact:** none.
+**Future implications:** this pattern (compute comparisons in code,
+have the LLM only phrase them) should apply to any future numeric
+comparison this agent ever needs to communicate — not a one-off patch.
+
+---
+
+## D-037 — D-036 fix confirmed on a second live run; one more tone issue caught and fixed
+
+**Date:** 2026-07-15
+**Decision:** Owner re-ran the full realistic-scale pipeline. Both errors
+from D-036 are confirmed gone: BME680 correctly stated as "$0.70 more
+expensive," and the fabricated ESP32-S3 lead-time claim no longer
+appears anywhere. Caught one more real issue in the same output: the
+model consistently wrote "our production timeline," "our build," "keep
+us on track" — a perspective slip, framing HELIX as a co-builder on the
+client's team rather than an external consultant advising them. Fixed
+with an explicit instruction to always use "your," never "our/we," when
+referring to the client's project.
+**Verification:** full regression across all 7 test suites after the
+change — all pass.
+**Cost impact:** none.
+**Future implications:** none open from this thread currently — next
+live re-run is the confirmation step for this specific fix, same as the
+last two rounds.
+
+---
+
+## D-038 — Third live run genuinely clean; lead-time arithmetic hardened proactively rather than left to chance
+
+**Date:** 2026-07-15
+**Decision:** Owner's third consecutive live re-run of the realistic-scale
+pipeline came back with no factual errors — correct price delta, correct
+perspective ("your build" throughout), and the model correctly computed
+112−14=98 days saved on its own. Rather than treat that as good enough
+because it happened to work, pre-computed the lead-time delta the same
+way cost delta was pre-computed in D-036 — consistent application of
+"don't leave arithmetic to the model even when it succeeds," not just
+"fix it when it fails."
+**Verification:** hand-checked both deltas (BME680: $0.70 more, 98 days
+faster; SHT31-DIS-B: $0.45 cheaper, 91 days faster) against the mock
+dataset before trusting them, then ran full regression across all 7
+suites — all pass.
+**Cost impact:** none.
+**Status:** this closes the loop on 3 rounds of real bugs found and
+fixed via actual field testing at realistic scale (D-035 API schema gap,
+D-036 comparison-math errors, D-037 perspective slip) — the realistic-
+scale pipeline has now produced one genuinely clean, correct, well-
+grounded output with no intervention needed. This is real evidence
+toward "consistently positive," not yet the same as many runs across
+many different BOMs, but a meaningfully stronger data point than round
+one.
+
+---
+
+## D-039 — Three variated test scenarios added; first honestly-scoped diagram capability built
+
+**Date:** 2026-07-15
+**Decision:** Per direct request for broader test coverage and expanded
+capability, added three new synthetic BOM scenarios isolating different
+failure modes (over-budget-only, two-simultaneous-lead-time-flags across
+a different device category entirely, physical-fit-only), and built
+generate_interconnect_diagram() — a high-level block diagram derived
+from component category tags, explicitly labeled throughout as a
+suggestion, not a verified schematic.
+**On the broader capability request (diagrams, layouts, code-on-request,
+"eliminate error"):** corrected the framing before building — no review
+process eliminates error, and generating an actual routable PCB layout
+is a deep EDA problem, not something to promise. What's real and now
+built: a category-based interconnect sketch. What's real but not yet
+built: starter code for well-known parts (flagged as needing the same
+grounding discipline as component lookups, to avoid hallucinated
+register/pin details) and schematic-level diagrams (need netlist input,
+which a flat BOM doesn't provide) — both logged as genuine next steps,
+not built this session.
+**Verification:** all three variated tests confirm their target failure
+mode fires in isolation from the others (cost-only, physical-fit-only,
+two-simultaneous-lead-times including one with no available mock
+alternative). Diagram tested against the realistic 18-item BOM and a
+no-compute edge case. Caught and fixed a real bug in my own edit process
+before it shipped: a str_replace accidentally deleted the
+protocol_by_category dictionary definition entirely, caught by grepping
+for its usage before declaring the file done, not assumed fine. Full
+regression across all 10 test suites — all pass.
+**Cost impact:** none.
+**Future implications:** starter-code generation and schematic-level
+diagrams (via netlist input) are the next real capability steps in this
+direction, both requiring the same "ground it, don't let the model
+free-hand technical specifics" discipline already applied throughout
+this project.
+
+---
+
+## D-040 — Hard grounding/validation safety net built, tested against the exact fabrications, wired into the API
+
+**Date:** 2026-07-15
+**Decision:** Per direct instruction after a repeated, serious fabrication
+pattern (model restating dollar amounts that were never true, even when
+correct values were given verbatim in the same prompt — "$36.00" for an
+$18 MCU, twice, across two different tests), built a hard validation
+layer with no soft warnings:
+- `check_full_grounding()`: extracts every dollar amount, dimension,
+  part number, and quantity from a synthesis, cross-checks each against
+  the real Component data and computed totals, returns exactly which
+  values are ungrounded.
+- `synthesize_recommendations_validated()`: calls synthesis, validates,
+  and on failure retries with the specific fabricated values fed back as
+  an explicit correction (not a blind resample) — up to 2 retries. If
+  still ungrounded after all retries, returns a safe fallback message
+  and never delivers unvalidated narrative text.
+- Wired into orchestrator.py: the API now calls the validated path
+  exclusively, logs every rejected attempt to the audit trail with the
+  exact fabricated values (nothing silently discarded), and returns a
+  `synthesis_validated` boolean in the response.
+**Verification, in order:**
+1. Ran `check_full_grounding()` against the exact verbatim fabricated
+   text from the real session — correctly caught the $36.00 (Test 1) and
+   both the $36/$35 (Test 3) fabrications.
+2. Confirmed zero false positives against genuinely correct text.
+3. Tested the full reject-retry-accept flow with a mock client that
+   fabricates once then produces clean text — confirmed exactly 2 calls,
+   1 rejection logged with the right values, 1 acceptance.
+4. Tested the exhausted-retries case with a mock client that always
+   fabricates — confirmed the safe fallback is returned and the
+   fabricated "$999" never appears anywhere in the final delivered text.
+5. Full regression across all 13 test suites, explicitly including the
+   4 core detection tests (over-budget, over-power, physical-fit,
+   multi-lead-time) per direct instruction to keep those green — all
+   pass, no regressions.
+**Real bug caught in my own test während writing it:** the first mock
+patch targeted the wrong location (bom_review_agent's namespace instead
+of llm_client, where the import actually resolves from) — caught by the
+test failing with a clear mismatch (mock never got called), not silently
+passing incorrectly.
+**Cost impact:** none. Retries cost additional local inference time only
+(no API cost, per the local-model architecture) — a few extra seconds on
+CPU, not a financial cost.
+**Future implications:** this pattern (validate after generation, retry
+with specific correction, safe fallback rather than ever deliver
+unvalidated content) is now the permanent path for any future synthesis
+call, not a one-off patch. Next: tiered service model + visual diagrams,
+per direct instruction, starting now that this passes.
+
+---
+
+## D-041 — Tiered service model locked (Basic/Standard/Senior); tier-gating API hook built and tested
+
+**Date:** 2026-07-15
+**Decision:** Locked the three-tier structure per direct instruction —
+Basic (checks + validated synthesis + text interconnect), Standard
+(+ cleaner visual interconnect), Senior/Premium (+ multi-view visual
+package: top-down blueprint, module-highlighted view, wiring layout,
+risk-highlighted zones). Documented in HELIX_REVENUE_SYSTEM_DESIGN.md
+Section 6. Added a real `tier` parameter to /task/bom-review gating
+deliverable depth — Basic omits diagram fields entirely (fastest, no
+added compute), Standard/Senior trigger the diagram path.
+**Honesty choice made explicitly:** actual rendered visual diagrams
+(real SVG/image output — top-down blueprint, exploded view, wiring
+layout) are NOT built yet. Rather than silently serving the same text
+diagram under a "premium" label, Standard/Senior tier responses include
+an explicit `visual_diagram_status` field stating rendering is designed
+but pending, alongside the existing text diagram as a stated fallback —
+a client paying for a tier should never receive a silent downgrade
+without being told.
+**Grounding safety net applies identically at every tier** — tier gates
+scope/depth of what's generated, never correctness. A Basic client's
+synthesis goes through the exact same D-040 validation as a Senior
+client's.
+**Verification:** new test (invalid tier rejected 422, Basic omits
+diagram fields, Standard includes text diagram + honest pending-visual
+note) plus full regression across all 14 suites — all pass.
+**Cost impact:** none yet — real visual rendering will have its own
+compute cost, evaluated when actually built.
+**Future implications:** next concrete build step is the actual visual
+rendering path (real SVG/image generation from component dimension/
+category data, extending generate_interconnect_diagram's category-based
+approach into genuine visual output) for Standard/Senior tiers —
+designed, not yet implemented.
+
+---
+
+## D-042 — Real SVG visual diagrams built (interconnect + placement blueprint); a real upstream bug caught while building risk-highlighting
+
+**Date:** 2026-07-15
+**Decision:** Built visual_diagram_generator.py with two real SVG
+outputs: generate_visual_interconnect_svg() (Standard tier — visual
+version of the category-based interconnect diagram) and
+generate_placement_blueprint_svg() (Senior tier — top-down placement
+sketch using real submitted width/depth per component, simple shelf-
+packing, with risk-highlighting on components tied to an actual
+finding). Wired both into the orchestrator, replacing the "not yet
+implemented" placeholder from D-041 with real image output.
+**Real bug found while building risk-highlighting, not a hypothetical:**
+the width/depth physical-fit findings never actually named which
+component was the problem — "Widest component (85.0mm) exceeds
+enclosure width (60.0mm)" never said which part was 85mm wide. This
+surfaced immediately when trying to match a finding to a component by
+name for the risk-highlight feature, and it's a real gap in the client-
+facing findings text itself, not just a diagram blocker — fixed at the
+source in bom_review_agent.py's review(), not worked around in the
+diagram code.
+**Second real bug, caught during testing before shipping:** label
+truncation cut component names mid-word ("Oversized display panel" →
+"Oversized disp..."). Fixed with word-boundary-aware truncation
+(_truncate_label), caught by the test itself failing on the original
+assertion, not assumed fine.
+**Verification:** both SVGs validated as well-formed XML via
+xml.etree.ElementTree.fromstring() (a real parse check, not eyeballing
+generated strings). Risk-highlighting verified against Variated Test 3
+specifically: the oversized display panel (genuinely named in a finding)
+gets the FLAGGED marker, the compact MCU (not named in any finding) does
+not — checked by position in the document, not just presence anywhere.
+Full regression across all 15 test suites after both the component-
+naming fix and the truncation fix — all pass, no regressions on any of
+the 4 core detection tests.
+**What's still honestly not built:** wiring-layout and module-exploded
+views (the remaining two of the four Senior-tier visual views specified
+in D-041) — both still need richer input (real net/connection data) than
+a flat BOM provides, same limitation already logged in D-039.
+**Cost impact:** none — local SVG generation, no external rendering
+service.
+**Future implications:** the width/depth finding fix (naming the actual
+component) improves every future BOM review's output quality, not just
+diagrams — retroactive, same as the D-033/D-035 fixes.
+
+---
+
+## D-043 — Environment reset recovered from the owner's own authoritative copy; lost fix reapplied and numerically verified
+
+**Date:** 2026-07-15
+**Decision:** Claude's container environment fully reset mid-session
+(working directory, installed packages, and the Postgres install all
+wiped). Recovered by requesting the owner's current project folder as
+ground truth — 124 files, all 42 decision log entries confirmed present
+— rather than reconstructing from memory or partial local snapshots,
+since the owner's copy (having every delta applied throughout this
+session) was the only genuinely complete and current version at that
+point.
+**What had to be rebuilt:** Python dependencies (reinstalled from the
+project's own requirements.txt, confirming it really is complete and
+correct), PostgreSQL + pgvector (reinstalled, schema rebuilt from the
+project's own migration file, including the D-022 permission grants
+baked into that file from the start).
+**What had to be reapplied:** the canvas-sizing fix for
+generate_placement_blueprint_svg() (D-042's follow-up) had been written
+in this session but never saved to a file before the reset hit — it only
+existed in conversation context. Reapplied from that context onto the
+owner's authoritative copy.
+**A second gap found during recovery:** export_and_view_diagrams.py had
+been created and tested in the prior sandbox session but never actually
+packaged into a delivered delta zip before the reset — it existed only
+on Claude's side, never reached the owner's machine at all. Recreated
+and included in this delta; this is its first real delivery.
+**Verification, not just re-assertion:** after reapplying the canvas
+fix, generated the actual placement blueprint SVG and numerically
+checked every rect's extent against the canvas bounds directly (not just
+confirming well-formed XML, which would not have caught the original
+clipping bug either) — canvas 315x330, furthest component extent
+285x240, no clipping. Then ran the full 15-suite regression — all pass.
+**Cost impact:** none — recovery time only, no data or work genuinely
+lost once the owner's copy was used as source of truth.
+**Future implications:** the owner's local copy is, by construction of
+this whole session's delta-based workflow, the durable canonical copy —
+Claude's own working environment should be treated as disposable/
+reconstructable from it, not the other way around.

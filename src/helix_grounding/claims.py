@@ -30,6 +30,7 @@ class ClaimKind(str, Enum):
     IDENTIFIER = "identifier"
     QUANTITY = "quantity"
     PERCENTAGE = "percentage"
+    DATE = "date"
 
 
 @dataclass(frozen=True)

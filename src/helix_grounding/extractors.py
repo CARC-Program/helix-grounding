@@ -123,11 +123,11 @@ class CurrencyExtractor(Extractor):
 class MeasurementExtractor(Extractor):
     """Physical quantities with an explicit unit.
 
-    Unit-aware on purpose: the original validator pooled every ``mm``
-    figure into one set, so a model could state a component's *width*
-    where its *height* belonged and pass validation because both numbers
-    existed somewhere in the BOM. Keeping the unit attached lets the
-    ground truth separate those sets when the caller wants it.
+    Unit-aware on purpose. Pooling every figure into one set regardless of
+    unit lets a model state the right number against the wrong dimension --
+    a width where a height belonged, a weight where a length did -- and pass
+    validation because the value existed *somewhere* in the source data.
+    Keeping the unit attached lets the ground truth separate those sets.
 
     Does not catch: unitless numbers, or values whose unit is implied by
     a preceding sentence rather than adjacent to the number.
@@ -281,6 +281,109 @@ class PercentageExtractor(Extractor):
         ]
 
 
+_MONTHS = {
+    "jan": 1, "january": 1, "feb": 2, "february": 2, "mar": 3, "march": 3,
+    "apr": 4, "april": 4, "may": 5, "jun": 6, "june": 6, "jul": 7, "july": 7,
+    "aug": 8, "august": 8, "sep": 9, "sept": 9, "september": 9,
+    "oct": 10, "october": 10, "nov": 11, "november": 11, "dec": 12, "december": 12,
+}
+_MONTH_ALT = "|".join(sorted(_MONTHS, key=len, reverse=True))
+
+
+class DateExtractor(Extractor):
+    """Calendar dates, normalised to ISO ``YYYY-MM-DD``.
+
+    Added because the invoice domain exposed a hole: a due date stated in
+    generated text produced no claim at all, so a model could invent one and
+    nothing would notice. A date is as decidable as a currency amount -- it
+    either appears in the source data or it does not -- so it belongs here
+    rather than in a judgement layer.
+
+    Recognises ``2026-09-15``, ``09/15/2026``, ``15.09.2026``,
+    ``September 15, 2026`` and ``15 September 2026``.
+
+    Ambiguity, stated rather than hidden: ``03/04/2026`` is March 4th in US
+    convention and April 3rd almost everywhere else, and no amount of parsing
+    resolves that. ``day_first`` picks the reading, defaulting to month-first;
+    set it per domain. Where one component exceeds 12 the order is
+    unambiguous and is read correctly regardless of the flag.
+
+    Does not catch: relative dates ("next Tuesday", "in 30 days"), quarters,
+    or bare month-year pairs. A relative date is a judgement claim -- it
+    depends on what "now" means -- and judgement is out of scope by design.
+    """
+
+    _ISO = re.compile(r"\b(\d{4})-(\d{1,2})-(\d{1,2})\b")
+    _NUMERIC = re.compile(r"\b(\d{1,2})[/.](\d{1,2})[/.](\d{4}|\d{2})\b")
+    _MONTH_FIRST = re.compile(
+        rf"\b({_MONTH_ALT})\.?\s+(\d{{1,2}})(?:st|nd|rd|th)?,?\s+(\d{{4}})\b",
+        re.IGNORECASE,
+    )
+    _DAY_FIRST = re.compile(
+        rf"\b(\d{{1,2}})(?:st|nd|rd|th)?\s+({_MONTH_ALT})\.?,?\s+(\d{{4}})\b",
+        re.IGNORECASE,
+    )
+
+    def __init__(self, day_first: bool = False):
+        self._day_first = day_first
+
+    @property
+    def kind(self) -> ClaimKind:
+        return ClaimKind.DATE
+
+    @staticmethod
+    def _iso(year: int, month: int, day: int) -> str | None:
+        """Reject impossible dates rather than normalising them into
+        something plausible -- a fabricated 2026-02-31 should not quietly
+        become a real day."""
+        if not (1 <= month <= 12 and 1 <= day <= 31):
+            return None
+        days_in_month = [31, 29 if year % 4 == 0 and (year % 100 or year % 400 == 0)
+                         else 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+        if day > days_in_month[month - 1]:
+            return None
+        return f"{year:04d}-{month:02d}-{day:02d}"
+
+    def extract(self, text: str) -> list[Claim]:
+        claims: list[Claim] = []
+        taken: list[tuple[int, int]] = []
+
+        def add(match, year, month, day):
+            # Longer written forms are matched first; skip anything that
+            # overlaps a claim already recorded so one date isn't reported twice.
+            if any(s < match.end() and match.start() < e for s, e in taken):
+                return
+            iso = self._iso(year, month, day)
+            if iso is None:
+                return
+            taken.append(match.span())
+            claims.append(Claim(
+                kind=ClaimKind.DATE, value=iso,
+                raw=match.group(0).strip(), span=match.span(),
+            ))
+
+        for m in self._MONTH_FIRST.finditer(text):
+            add(m, int(m.group(3)), _MONTHS[m.group(1).lower()], int(m.group(2)))
+        for m in self._DAY_FIRST.finditer(text):
+            add(m, int(m.group(3)), _MONTHS[m.group(2).lower()], int(m.group(1)))
+        for m in self._ISO.finditer(text):
+            add(m, int(m.group(1)), int(m.group(2)), int(m.group(3)))
+        for m in self._NUMERIC.finditer(text):
+            first, second = int(m.group(1)), int(m.group(2))
+            year = int(m.group(3))
+            if year < 100:  # two-digit year: 00-69 -> 2000s, 70-99 -> 1900s
+                year += 2000 if year < 70 else 1900
+            if first > 12:      # unambiguous: first component must be the day
+                day, month = first, second
+            elif second > 12:   # unambiguous: second component must be the day
+                day, month = second, first
+            else:
+                day, month = (first, second) if self._day_first else (second, first)
+            add(m, year, month, day)
+
+        return claims
+
+
 def default_extractors() -> list[Extractor]:
     """The standard set. Callers wanting different behaviour should build
     their own list rather than monkey-patching these."""
@@ -290,4 +393,5 @@ def default_extractors() -> list[Extractor]:
         IdentifierExtractor(),
         QuantityExtractor(),
         PercentageExtractor(),
+        DateExtractor(),
     ]

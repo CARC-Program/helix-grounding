@@ -35,6 +35,32 @@ it can tell you is that no figure reached your customer that you did not put in
 front of the model. Unlike a faithfulness score, that is something you can
 prove.
 
+### Two domains, one core
+
+A domain adapter turns your data into a `GroundTruth`. The core never learns
+what your data is.
+
+```python
+from helix_grounding.domains.invoice import ground_truth_for_invoice
+
+report = Verifier().verify(summary, ground_truth_for_invoice(invoice))
+```
+
+Given a $1,000 invoice with 10% off and 8.25% tax, this text produces three
+findings:
+
+> Invoice INV-2026-0412 totals **$1,074.25** after 8.25% tax of **$82.50**,
+> and payment is due **2026-10-01**.
+
+The total is wrong. The tax is 8.25% of the *subtotal* rather than the
+discounted base — the arithmetic slip a model actually makes, and one that
+reads as correct to a human skimming. The due date is invented. Meanwhile
+`INV-2026-0412` and `8.25%` are recognised as genuine and pass.
+
+Adding that second domain is what forced date support into the core: before
+it, a fabricated due date produced no claim at all and passed through
+silently.
+
 ---
 
 ## What is actually built
@@ -44,7 +70,7 @@ because it is planned.
 
 | Module | What it does | State |
 |---|---|---|
-| `src/helix_grounding/` | The verification library — extractors, ground truth, retry loop | Working, 22 tests |
+| `src/helix_grounding/` | The verification library — extractors, ground truth, retry loop | Working, 53 tests, two domains |
 | `src/helix_bom/` | BOM review agent: budget, power, physical fit, lead-time checks | Working, 14 sandbox suites |
 | `src/helix_llm/` | Backend-agnostic model client (local Ollama by default, Anthropic optional) | Working, local path unverified end-to-end on this machine |
 | `src/helix_api/` | FastAPI orchestrator with signature auth and audit logging | Skeleton — routes work, not deployed |

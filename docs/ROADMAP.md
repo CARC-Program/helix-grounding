@@ -28,12 +28,14 @@ output.*
 - [x] Extract the validator from the BOM agent into `helix_grounding`
 - [x] Domain-agnostic core with a reference adapter (`domains/bom.py`)
 - [x] Fix the six real defects the extraction surfaced
-- [ ] Write the README's usage section against a domain that is not BOM —
-      proves the abstraction, or exposes that it leaks
+- [x] A second domain adapter — `domains/invoice.py`. Chose invoices over lab
+      results because they stress a shape BOM never did: a derivation chain
+      (subtotal → discount → tax → total) rather than flat sums
+- [x] Prove the abstraction structurally, not by assertion. The core is now
+      parsed, stripped of docstrings, and checked for domain coupling by test
 - [ ] Publish to PyPI under a name that is actually available
-- [ ] A second domain adapter. Invoicing or lab results are the obvious
-      candidates: money and measurements, where a wrong number is a real
-      problem
+- [ ] A third domain, ideally chosen by whoever adopts it first rather than
+      guessed at here
 
 ### M2 — The wedge is usable by a stranger
 *Closes when: a hardware maker who has never spoken to the author runs a BOM

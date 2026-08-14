@@ -24,7 +24,13 @@ DEFAULT_TOLERANCES: dict[ClaimKind, float] = {
     ClaimKind.PERCENTAGE: 0.05,
     ClaimKind.QUANTITY: 0.0,
     ClaimKind.IDENTIFIER: 0.0,
+    ClaimKind.DATE: 0.0,
 }
+
+# Kinds compared as exact strings rather than numbers with a tolerance. There
+# is no such thing as an approximately correct part number, and a due date is
+# either the due date or it is a different day.
+TOKEN_KINDS: frozenset[ClaimKind] = frozenset({ClaimKind.IDENTIFIER, ClaimKind.DATE})
 
 
 @dataclass
@@ -39,7 +45,7 @@ class GroundTruth:
     """
 
     _numeric: dict[tuple[ClaimKind, str], set[float]] = field(default_factory=dict)
-    _tokens: set[str] = field(default_factory=set)
+    _tokens: dict[ClaimKind, set[str]] = field(default_factory=dict)
     tolerances: dict[ClaimKind, float] = field(
         default_factory=lambda: dict(DEFAULT_TOLERANCES)
     )
@@ -57,16 +63,39 @@ class GroundTruth:
             self.allow(kind, value, unit)
         return self
 
-    def allow_token(self, token: str) -> "GroundTruth":
-        """Permit one identifier, case-insensitively."""
-        if token:
-            self._tokens.add(token.replace("-", "").replace("/", "").upper())
-            self._tokens.add(token.upper())
+    def allow_token(self, token: str, kind: ClaimKind = ClaimKind.IDENTIFIER) -> "GroundTruth":
+        """Permit one exact-match value — an identifier or a date.
+
+        Identifiers are stored twice: verbatim and with separators stripped,
+        so "SHT31-DIS-B" still matches when a model writes "SHT31DISB".
+        Dates are stored as given, because they arrive already normalised to
+        ISO and stripping their hyphens would only invite a false match.
+        """
+        if not token:
+            return self
+        bucket = self._tokens.setdefault(kind, set())
+        bucket.add(token.upper())
+        if kind is ClaimKind.IDENTIFIER:
+            bucket.add(token.replace("-", "").replace("/", "").upper())
         return self
 
-    def allow_tokens(self, tokens) -> "GroundTruth":
+    def allow_tokens(self, tokens, kind: ClaimKind = ClaimKind.IDENTIFIER) -> "GroundTruth":
         for token in tokens:
-            self.allow_token(token)
+            self.allow_token(token, kind)
+        return self
+
+    def allow_date(self, value) -> "GroundTruth":
+        """Permit one date. Accepts an ISO string or anything with
+        ``.isoformat()`` — a ``date`` or ``datetime`` passes straight through,
+        so callers need not stringify their own data first."""
+        if value is None:
+            return self
+        iso = value.isoformat()[:10] if hasattr(value, "isoformat") else str(value)
+        return self.allow_token(iso, ClaimKind.DATE)
+
+    def allow_dates(self, values) -> "GroundTruth":
+        for value in values:
+            self.allow_date(value)
         return self
 
     def allow_pairwise_differences(
@@ -111,12 +140,14 @@ class GroundTruth:
     # ---- querying -------------------------------------------------
 
     def permits(self, kind: ClaimKind, value: float | str, unit: str = "") -> bool:
-        if kind is ClaimKind.IDENTIFIER:
+        if kind in TOKEN_KINDS:
             token = str(value)
-            return (
-                token.upper() in self._tokens
-                or token.replace("-", "").replace("/", "").upper() in self._tokens
-            )
+            allowed = self._tokens.get(kind, set())
+            if token.upper() in allowed:
+                return True
+            if kind is ClaimKind.IDENTIFIER:
+                return token.replace("-", "").replace("/", "").upper() in allowed
+            return False
 
         tolerance = self.tolerances.get(kind, 0.0)
         candidates: set[float] = set()
@@ -128,7 +159,7 @@ class GroundTruth:
         return any(abs(numeric_value - allowed) <= tolerance for allowed in candidates)
 
     def is_empty(self) -> bool:
-        return not self._numeric and not self._tokens
+        return not self._numeric and not any(self._tokens.values())
 
     def describe(self) -> str:
         """Human-readable summary — useful when a verdict is surprising
@@ -139,8 +170,9 @@ class GroundTruth:
         ):
             label = f"{kind.value}[{unit}]" if unit else kind.value
             parts.append(f"{label}: {len(values)} values")
-        if self._tokens:
-            parts.append(f"identifiers: {len(self._tokens)} tokens")
+        for kind in sorted(self._tokens, key=lambda k: k.value):
+            if self._tokens[kind]:
+                parts.append(f"{kind.value}: {len(self._tokens[kind])} tokens")
         if self.unchecked_kinds:
             skipped = ", ".join(sorted(k.value for k in self.unchecked_kinds))
             parts.append(f"unchecked: {skipped}")

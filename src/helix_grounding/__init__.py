@@ -38,6 +38,7 @@ from .claims import Claim, ClaimKind, GroundingReport
 from .extractors import (
     DEFAULT_KNOWN_VOCABULARY,
     CurrencyExtractor,
+    DateExtractor,
     Extractor,
     IdentifierExtractor,
     MeasurementExtractor,
@@ -45,7 +46,7 @@ from .extractors import (
     QuantityExtractor,
     default_extractors,
 )
-from .truth import DEFAULT_TOLERANCES, GroundTruth
+from .truth import DEFAULT_TOLERANCES, TOKEN_KINDS, GroundTruth
 from .verifier import DEFAULT_FALLBACK, ValidatedGeneration, Verifier
 
 __version__ = "0.1.0"
@@ -59,6 +60,7 @@ __all__ = [
     "ValidatedGeneration",
     "Extractor",
     "CurrencyExtractor",
+    "DateExtractor",
     "MeasurementExtractor",
     "IdentifierExtractor",
     "QuantityExtractor",
@@ -66,6 +68,7 @@ __all__ = [
     "default_extractors",
     "DEFAULT_KNOWN_VOCABULARY",
     "DEFAULT_TOLERANCES",
+    "TOKEN_KINDS",
     "DEFAULT_FALLBACK",
     "__version__",
 ]

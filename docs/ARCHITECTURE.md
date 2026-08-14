@@ -63,14 +63,40 @@ vertical is a new file in `domains/`, not a change to the verifier.
 | Piece | Responsibility |
 |---|---|
 | `claims.py` | `Claim`, `ClaimKind`, `GroundingReport`, correction-note generation |
-| `extractors.py` | Pattern-based claim recovery — currency, measurement, identifier, quantity, percentage |
+| `extractors.py` | Pattern-based claim recovery — currency, measurement, identifier, quantity, percentage, date |
 | `truth.py` | `GroundTruth`: allowed values per kind and unit, tolerances, derived differences |
 | `verifier.py` | Runs extractors against ground truth; owns the generate-and-validate loop |
 | `domains/bom.py` | Builds a `GroundTruth` from components and constraints |
+| `domains/invoice.py` | Builds a `GroundTruth` from an invoice and its lines |
 
 **Zero runtime dependencies, deliberately.** The argument for this library is
 that checking a model's output should not require another model call. A
 dependency on an inference client would undercut that.
+
+### What the second domain proved
+
+The claim "domain-agnostic" is cheap to make with one domain, because a core
+shaped around its only caller looks general right up until the second one
+arrives. Adding invoices forced exactly two core changes, both general
+capabilities rather than special cases:
+
+- **`ClaimKind.DATE` and `DateExtractor`.** A due date stated in generated
+  text produced no claim at all, so a model could invent one and nothing
+  noticed. Dates are as decidable as currency amounts, so they belong in the
+  core. BOM review can use them too, without a line of invoice code involved.
+- **Per-kind token storage.** `GroundTruth` kept exact-match values in one
+  untyped set, which worked only while identifiers were the sole exact-match
+  kind. It is now keyed by kind, so a date cannot satisfy an identifier claim.
+
+Nothing else changed. `tests/test_invoice_domain.py` enforces this
+structurally: it parses each core module, strips docstrings, and fails if a
+domain concept survives into executable code.
+
+Invoices were chosen because they stress a shape BOM never did. BOM review is
+sums and comparisons; an invoice is a *chain* — line totals feed a subtotal,
+the subtotal feeds a discount, the remainder feeds a tax, the tax feeds the
+total. Every intermediate is a figure a model will quote, so the adapter has
+to permit the whole working and not just the answer.
 
 ### What it cannot do
 
@@ -91,6 +117,14 @@ none — it manufactures false confidence.
   and word-suffix forms are (`$36`, `36 dollars`, `36 USD`).
 - **Units must be adjacent to the number.** A value whose unit is implied by a
   previous sentence reads as unitless.
+- **Relative dates are out of scope** ("next Tuesday", "in 30 days", "Q3").
+  A relative date depends on what *now* means, which makes it a judgement
+  claim. Absolute dates are checked in ISO, slash, and written forms, with
+  impossible ones rejected rather than normalised into a real day.
+- **Ambiguous numeric dates need a convention.** `03/04/2026` is March 4th in
+  US usage and April 3rd nearly everywhere else, and no parser resolves that.
+  `DateExtractor(day_first=...)` picks; where a component exceeds 12 the order
+  is unambiguous and read correctly regardless.
 - **An empty `GroundTruth` raises** rather than reporting everything
   ungrounded — that state almost always means the caller forgot a step, and a
   loud failure beats a confidently wrong verdict.

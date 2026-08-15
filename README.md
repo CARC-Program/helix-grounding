@@ -163,6 +163,7 @@ src/helix_grounding/   the library
 src/helix_bom/         the worked example: ingest, checks, CLI
 src/helix_llm/         optional model client (local Ollama, or Anthropic)
 docs/                  decision log, architecture, business model, case study
+                       PUBLISHING.md — release checklist
 ```
 
 `docs/DECISION_LOG.md` is 45 decisions with the reasoning attached, including

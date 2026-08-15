@@ -10,7 +10,9 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
 license-files = ["LICENSE"]
-authors = [{ name = "Bobby" }]
+# Copyright and authorship sit with the author of the work. The PyPI account
+# that uploads it can belong to someone else -- see PUBLISHING.md.
+authors = [{ name = "Helix Labs" }]
 keywords = [
     "llm", "hallucination", "grounding", "validation", "evals",
     "guardrails", "verification", "ai-safety", "bom",

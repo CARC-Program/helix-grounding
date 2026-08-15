@@ -35,8 +35,11 @@ output.*
       parsed, stripped of docstrings, and checked for domain coupling by test
 - [x] Package for PyPI — `helix-grounding` confirmed available, wheel builds,
       twine passes, and a clean-venv install proves the zero-dependency claim
-- [ ] **Actually publish it.** Needs a PyPI account that is not mine, and a
-      real legal name in the LICENSE copyright line
+- [x] Copyright and authorship set (Helix Labs — the author holds
+      copyright; the account owner owns the account, which is a different field)
+- [ ] **Actually publish it.** Needs a PyPI account, a GitHub username to
+      replace the placeholder URLs, and a decision on whether a real full
+      name should be permanently public. See `docs/PUBLISHING.md`
 - [ ] A third domain, ideally chosen by whoever adopts it first rather than
       guessed at here
 

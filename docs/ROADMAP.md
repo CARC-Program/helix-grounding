@@ -33,7 +33,10 @@ output.*
       (subtotal → discount → tax → total) rather than flat sums
 - [x] Prove the abstraction structurally, not by assertion. The core is now
       parsed, stripped of docstrings, and checked for domain coupling by test
-- [ ] Publish to PyPI under a name that is actually available
+- [x] Package for PyPI — `helix-grounding` confirmed available, wheel builds,
+      twine passes, and a clean-venv install proves the zero-dependency claim
+- [ ] **Actually publish it.** Needs a PyPI account that is not mine, and a
+      real legal name in the LICENSE copyright line
 - [ ] A third domain, ideally chosen by whoever adopts it first rather than
       guessed at here
 

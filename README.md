@@ -126,6 +126,7 @@ src/helix_api/         HTTP surface
 tests/                 pytest suite
     sandbox/           script-style suites, run as subprocesses
 docs/DECISION_LOG.md   45 decisions with reasoning — read this one
+docs/BUSINESS_MODEL.md who pays for what, and the honest ceilings
 docs/CASE_STUDY.html   a real caught fabrication, reproducible
 docs/MARKET_RESEARCH.html
 scripts/               developer utilities

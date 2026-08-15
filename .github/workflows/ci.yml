@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master, rebuild]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    # Across the versions pyproject claims to support. Claiming 3.10 and only
+    # ever running 3.11 is how a package ships broken for a third of its users.
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.10", "3.11", "3.12", "3.13"]
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Install
+        run: pip install -e ".[dev]"
+
+      - name: Test
+        run: pytest -q
+
+  package:
+    # Builds the wheel and installs it somewhere that has nothing else in it.
+    # A developer machine with a hundred unrelated packages will happily import
+    # a dependency the wheel never declared; a bare venv will not.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build
+        run: |
+          pip install build twine
+          python -m build
+          python -m twine check dist/*
+
+      - name: Install the wheel with nothing else present
+        run: |
+          python -m venv /tmp/clean
+          /tmp/clean/bin/pip install dist/*.whl
+
+      - name: Assert the package really has no runtime dependencies
+        run: |
+          installed=$(/tmp/clean/bin/pip list --format=freeze | grep -v -E '^(pip|setuptools|helix-grounding)=' || true)
+          if [ -n "$installed" ]; then
+            echo "Unexpected runtime dependencies were pulled in:"
+            echo "$installed"
+            exit 1
+          fi
+          echo "No runtime dependencies, as claimed."
+
+      - name: Smoke-test the installed package
+        run: |
+          /tmp/clean/bin/python -c "
+          from helix_grounding import Verifier, GroundTruth, ClaimKind
+          truth = GroundTruth().allow(ClaimKind.CURRENCY, 18.00)
+          report = Verifier().verify('It costs \$99.00.', truth)
+          assert not report.is_grounded, 'fabricated value was not caught'
+          print(report.summary())
+          "
+          /tmp/clean/bin/helix-bom review tests/fixtures/altium_with_pricing.csv --budget 100

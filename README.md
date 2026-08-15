@@ -1,21 +1,24 @@
-# Project Helix
+# helix-grounding
 
-Deterministic verification of factual values in AI-generated text, proven on
-hardware bills of materials.
+**Catch the numbers an AI made up — without asking another AI.**
 
-The problem: a language model states a number that does not appear in its
-source data. Anywhere AI touches money, specifications, or deadlines, that is
-not a quality issue — it is a liability.
+A language model states a figure that isn't in its source data. In anything
+touching money, specifications, or deadlines, that's not a quality issue —
+it's a liability.
 
-The usual answer is to check the output with another model: LLM-as-judge,
+The usual defence is to check the output with another model: LLM-as-judge,
 semantic entailment, embedding similarity. All three are probabilistic, all
-three cost an inference call, and all three can themselves be wrong.
+three cost an inference call, and all three can be wrong themselves.
 
-`helix_grounding` does not do that. It extracts every currency amount,
-measurement, identifier, quantity and percentage from generated text and checks
-each against a set of values computed from the source data. For that class of
-claim the answer is decidable: a value is in the set or it is not. No model
-call, no judgement, no confidence score.
+This doesn't do that. It extracts every currency amount, measurement,
+identifier, quantity, percentage and date from generated text and checks each
+against values computed from your source data. For that class of claim the
+answer is decidable: a value is in the set or it isn't. **No model call, no
+judgement, no confidence score.**
+
+```bash
+pip install helix-grounding
+```
 
 ```python
 from helix_grounding import Verifier, GroundTruth, ClaimKind
@@ -25,20 +28,102 @@ report = Verifier().verify(model_output, truth)
 
 if not report.is_grounded:
     print(report.summary())
-    retry_prompt = base_prompt + report.correction_note()
+    # -> UNGROUNDED: 1 of 4 claims not found in source data — $36.00 (currency)
+    retry = base_prompt + report.correction_note()
 ```
 
-**Scope, stated plainly:** this verifies *values*, not claims requiring
-judgement. It cannot tell you whether advice is good, whether a summary is
-complete, or whether a conclusion follows — those need a different layer. What
-it can tell you is that no figure reached your customer that you did not put in
-front of the model. Unlike a faithfulness score, that is something you can
-prove.
+The correction names the specific invented value and quotes the sentence it
+appeared in, because a blind re-roll reproduces the same error at roughly the
+same rate.
 
-### Two domains, one core
+---
+
+## See it work in one command
+
+The package ships a complete worked example: a bill-of-materials reviewer
+built on the library. Point it at a real CSV export.
+
+```bash
+helix-bom review my_bom.csv --budget 10
+```
+
+```
+BOM total: $13.81  (budget $10.00)
+
+Findings:
+  [CRITICAL] BOM total ($13.81) exceeds stated budget ($10.00) by $3.81.
+  [WARNING]  ARM Cortex-M4 MCU has a stated lead time of 120 days — this is a
+             real supply-chain risk that can silently become the critical path.
+
+NOT CHECKED (3):
+  physical fit
+      no component dimensions in the submitted data — standard EDA exports
+      carry footprints, not millimetres
+
+  These are not passes. Supply the missing columns to check them.
+```
+
+It reads what KiCad, Altium and spreadsheets actually export: preamble lines
+before the header, semicolon delimiters, do-not-populate rows, and `1.234,56`
+versus `1,234.56` decided per file rather than per cell.
+
+**A check that couldn't run is never reported as a pass.** `--strict` makes
+"couldn't check" a non-zero exit; `--json` emits the same for a machine.
+
+---
+
+## A real fabrication, caught
+
+Not a demo — a model actually wrote both of these while reviewing a BOM:
+
+> "the Bosch BME680 at **$3.10** is slightly cheaper than your current part at
+> **$2.40**"
+
+> "The ESP32-S3 module at **$3.40** has a lead time concern"
+
+The second is caught: $3.20 is the real price, and $3.40 appears nowhere in
+the source data.
+
+**The first passes the check — and should.** Both numbers are real. What's
+false is the word *cheaper*, a claim about the *relation* between two values.
+No value-checker can see that, and a library claiming otherwise would be
+misrepresenting its own scope. It's prevented a different way: the comparison
+is computed in Python before the prompt is built, so the model is only asked
+to phrase an answer that's already correct.
+
+Reproduce both yourself:
+
+```bash
+python scripts/reproduce_d036.py
+```
+
+Full write-up: `docs/CASE_STUDY.html`.
+
+---
+
+## What it can't do
+
+Stated plainly, because a validation layer that quietly misses a category is
+worse than none — it manufactures false confidence.
+
+- **Judgement claims are out of scope.** Whether advice is good, whether a
+  summary is complete, whether a conclusion follows. Those need an
+  LLM-as-judge layer. This is not one.
+- **Identifiers need a vocabulary.** No lexical rule separates a part number
+  from a standards name — `RS485` and `BME280` are the same shape. A default
+  vocabulary of known non-identifiers ships in, and is meant to be extended.
+- **Amounts written as words** ("thirty-six dollars") aren't caught. Symbol
+  and suffix forms are: `$36`, `36 dollars`, `36 USD`.
+- **Relative dates are out of scope** ("next Tuesday", "in 30 days") — those
+  depend on what *now* means, which makes them judgement claims.
+
+---
+
+## Your own data
 
 A domain adapter turns your data into a `GroundTruth`. The core never learns
-what your data is.
+what your data is — two ship as reference implementations, and a third is a
+new file, not a change to the verifier.
 
 ```python
 from helix_grounding.domains.invoice import ground_truth_for_invoice
@@ -46,117 +131,44 @@ from helix_grounding.domains.invoice import ground_truth_for_invoice
 report = Verifier().verify(summary, ground_truth_for_invoice(invoice))
 ```
 
-Given a $1,000 invoice with 10% off and 8.25% tax, this text produces three
-findings:
+Invoices exercise a shape a BOM never does: a *chain*, where line totals feed
+a subtotal, the subtotal feeds a discount, the remainder feeds a tax. Every
+intermediate is a figure a model will quote, so the adapter permits the whole
+working — not just the answer.
 
-> Invoice INV-2026-0412 totals **$1,074.25** after 8.25% tax of **$82.50**,
-> and payment is due **2026-10-01**.
+Adding that second domain is what forced date support into the core. Before
+it, a fabricated due date produced no claim at all and passed straight
+through.
 
-The total is wrong. The tax is 8.25% of the *subtotal* rather than the
-discounted base — the arithmetic slip a model actually makes, and one that
-reads as correct to a human skimming. The due date is invented. Meanwhile
-`INV-2026-0412` and `8.25%` are recognised as genuine and pass.
-
-Adding that second domain is what forced date support into the core: before
-it, a fabricated due date produced no claim at all and passed through
-silently.
+**Zero runtime dependencies, deliberately.** The argument for this library is
+that checking a model's output shouldn't require another model. A dependency
+on an inference client would undercut that.
 
 ---
 
-## What is actually built
+## Development
 
-Every row below is running code with tests behind it. Nothing is listed here
-because it is planned.
-
-| Module | What it does | State |
-|---|---|---|
-| `src/helix_grounding/` | The verification library — extractors, ground truth, retry loop | Working, 53 tests, two domains |
-| `src/helix_bom/` | BOM review: CSV ingest, deterministic checks, `helix-bom` CLI | Working, 57 tests + 14 sandbox suites |
-| `src/helix_llm/` | Backend-agnostic model client (local Ollama by default, Anthropic optional) | Working, local path unverified end-to-end on this machine |
-| `src/helix_api/` | FastAPI surface: API key auth, tier gating, audit log | Skeleton — routes work and are tested, never deployed |
-
-## Running it
-
-Requires Python 3.10+.
+Python 3.10+.
 
 ```bash
 pip install -e ".[dev]"
 pytest
 ```
 
-### Reviewing a real BOM
-
-```bash
-helix-bom review my_bom.csv --budget 50 --enclosure 100x80x25
-```
-
-Takes a CSV export from KiCad, Altium, or a spreadsheet as-is: it finds the
-header past KiCad's preamble lines, detects semicolon delimiters, excludes
-do-not-populate rows, and reads `1.234,56` and `1,234.56` as the same amount
-by deciding the convention per file rather than per cell.
-
-It reports what it **could not** check as loudly as what it could. A plain
-KiCad export has no prices, dimensions, power figures or lead times, so most
-checks cannot run — and a report that stayed quiet about that would read as a
-clean bill of health. `--strict` turns "could not check" into a non-zero exit,
-which is what you want gating a build. `--json` emits the same information for
-a machine.
-
-161 tests pass, nothing is skipped, and nothing but Python is required. The
-project has no database and no server dependency — the library and the CLI
-are both stateless.
-
-The BOM agent's LLM synthesis layer needs a backend. By default it calls a
-local Ollama instance — see `docs/OLLAMA_SETUP.md`. To use the hosted Anthropic
-path instead, set `HELIX_LLM_BACKEND=hosted` and put `ANTHROPIC_API_KEY` in a
-`.env` at the repository root. That file is gitignored; `.env.example` is the
-template. Never paste a real key into a chat.
-
-## Layout
+161 tests, nothing skipped, no database and no services required.
 
 ```
-src/helix_grounding/   the product — domain-agnostic, zero dependencies
-    domains/           bom.py, invoice.py; a new vertical is a new file here
-src/helix_bom/         the proving ground
-    ingest.py          reads real CSV exports, reports every assumption
-    agent.py           the deterministic checks
-    cli.py             the helix-bom command
-src/helix_llm/         model client abstraction
-src/helix_api/         HTTP surface
-tests/                 pytest suite
-    sandbox/           script-style suites, run as subprocesses
-docs/DECISION_LOG.md   45 decisions with reasoning — read this one
-docs/BUSINESS_MODEL.md who pays for what, and the honest ceilings
-docs/CASE_STUDY.html   a real caught fabrication, reproducible
-docs/MARKET_RESEARCH.html
-scripts/               developer utilities
+src/helix_grounding/   the library
+    domains/           bom.py, invoice.py — add a vertical here
+src/helix_bom/         the worked example: ingest, checks, CLI
+src/helix_llm/         optional model client (local Ollama, or Anthropic)
+docs/                  decision log, architecture, business model, case study
 ```
 
-## Evidence
+`docs/DECISION_LOG.md` is 45 decisions with the reasoning attached, including
+the bugs that produced the design above. It is the most useful file here for
+understanding *why* rather than *what*.
 
-`docs/CASE_STUDY.html` walks through two false statements a model actually
-made reviewing a BOM, and why catching them took two different defences —
-only one was a fabricated *value*; the other was a wrong *relation* between
-two real ones. Reproduce both:
+## Licence
 
-```bash
-python scripts/reproduce_d036.py
-```
-
-It is part of the test suite, so the case study cannot quietly stop being
-true while still making its claims.
-
-## History
-
-This repository was rebuilt on 2026-08-14. The `master` branch holds the prior
-structure verbatim: 87 markdown documents across 16 numbered folders, against
-five real source modules. The documents described systems that did not exist,
-and checkpoints were marked complete for having been written about.
-
-Nothing was thrown away — the baseline commit is what makes the restructure
-recoverable. `docs/DECISION_LOG.md` survives intact and is the single most
-valuable artifact here: 43 decisions with the reasoning attached, including
-several real bugs found by running things rather than thinking about them.
-
-`docs/MARKET_RESEARCH.html` records why the direction changed, and which
-constraints eliminated which options.
+MIT.

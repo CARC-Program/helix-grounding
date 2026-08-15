@@ -5,31 +5,61 @@ build-backend = "hatchling.build"
 [project]
 name = "helix-grounding"
 version = "0.1.0"
-description = "Deterministic verification of factual values in AI-generated text"
+description = "Catch the numbers an AI made up, without asking another AI"
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "MIT" }
-keywords = ["llm", "hallucination", "grounding", "validation", "evals", "guardrails"]
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Bobby" }]
+keywords = [
+    "llm", "hallucination", "grounding", "validation", "evals",
+    "guardrails", "verification", "ai-safety", "bom",
+]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Software Development :: Quality Assurance",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Typing :: Typed",
 ]
 
 # No runtime dependencies, deliberately. The whole argument for this library is
 # that checking a model's output should not require another model call -- a
-# dependency on an inference client would undercut the claim.
+# dependency on an inference client would undercut the claim. The BOM reviewer
+# and its CLI are stdlib-only too, which is why they ship in the same wheel
+# rather than costing anyone an install they did not ask for.
 dependencies = []
 
 [project.optional-dependencies]
-dev = ["pytest>=8"]
+# Only needed to have a model *write* the narrative. Everything the library
+# verifies, and every deterministic check the CLI runs, works without these.
+llm = ["ollama>=0.3", "anthropic>=0.40", "python-dotenv>=1.0"]
+dev = ["pytest>=8", "build", "twine"]
+
+[project.urls]
+Documentation = "https://github.com/bobby/helix-grounding#readme"
+Source = "https://github.com/bobby/helix-grounding"
+Changelog = "https://github.com/bobby/helix-grounding/blob/main/docs/DECISION_LOG.md"
 
 [project.scripts]
 helix-bom = "helix_bom.cli:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/helix_grounding", "src/helix_bom"]
+# helix_api is deliberately absent: an undeployed skeleton is not something to
+# put in someone else's site-packages.
+packages = [
+    "src/helix_grounding",
+    "src/helix_bom",
+    "src/helix_llm",
+]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/", "tests/", "docs/", "scripts/", "README.md", "LICENSE", "pyproject.toml"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

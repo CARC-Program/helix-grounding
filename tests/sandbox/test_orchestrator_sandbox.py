@@ -1,7 +1,7 @@
 """
 In-process orchestrator test using FastAPI's TestClient — no real network
 connection, no external service contacted. Now exercises the full
-request path including signature verification and audit logging.
+request path including API key verification and audit logging.
 """
 
 import sys
@@ -10,7 +10,6 @@ import os
 
 from fastapi.testclient import TestClient
 from helix_api.app import app, _registry, _audit, BOMReviewRequest
-from helix_api.auth import provision_simulated_terminal, sign_request
 
 client = TestClient(app)
 
@@ -39,14 +38,12 @@ def run():
     print("[PASS] /health returns ok")
 
     # Provision a simulated terminal and register its public key server-side
-    terminal = provision_simulated_terminal("terminal-sandbox-001")
-    _registry.register(terminal.terminal_id, terminal.public_key_pem)
+    issued = _registry.issue("sandbox test key")
 
     # Sign the exact JSON the server will re-serialize and verify against
     model = BOMReviewRequest(**SYNTHETIC_PAYLOAD)
     payload_bytes = model.model_dump_json().encode()
-    signature = sign_request(terminal.private_key, payload_bytes)
-    headers = {"X-Terminal-Id": terminal.terminal_id, "X-Signature": signature.hex()}
+    headers = {"Authorization": f"Bearer {issued.secret}"}
 
     r = client.post("/task/bom-review", json=SYNTHETIC_PAYLOAD, headers=headers)
     assert r.status_code == 200, r.text
@@ -58,22 +55,22 @@ def run():
     print(f"[PASS] Synthesis field present: {str(data['synthesis'])[:80]}...")
 
     # Tampered signature must be rejected
-    bad_headers = {"X-Terminal-Id": terminal.terminal_id, "X-Signature": "00" * 64}
+    bad_headers = {"Authorization": "Bearer helix_sk_not_a_real_key"}
     r = client.post("/task/bom-review", json=SYNTHETIC_PAYLOAD, headers=bad_headers)
     assert r.status_code == 401, r.text
-    print("[PASS] Tampered signature correctly rejected (401)")
+    print("[PASS] Wrong API key correctly rejected (401)")
 
     # Unknown terminal_id must be rejected
-    unknown_headers = {"X-Terminal-Id": "terminal-never-registered", "X-Signature": signature.hex()}
+    unknown_headers = {"Authorization": "Bearer totally-malformed"}
     r = client.post("/task/bom-review", json=SYNTHETIC_PAYLOAD, headers=unknown_headers)
     assert r.status_code == 401, r.text
-    print("[PASS] Unknown terminal_id correctly rejected (401)")
+    print("[PASS] Malformed credential correctly rejected (401)")
 
     # Revoked terminal must be rejected even with a previously-valid signature
-    _registry.revoke(terminal.terminal_id)
+    _registry.revoke(issued.key_id)
     r = client.post("/task/bom-review", json=SYNTHETIC_PAYLOAD, headers=headers)
     assert r.status_code == 401, r.text
-    print("[PASS] Revoked terminal correctly rejected (401), even with a valid signature")
+    print("[PASS] Revoked key correctly rejected (401), even though the secret is right")
 
     # Audit log should now contain successful + failed attempts
     entries = _audit.all_entries()

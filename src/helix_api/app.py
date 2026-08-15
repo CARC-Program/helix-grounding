@@ -1,16 +1,15 @@
 """
-HELIX NEXUS — Orchestrator skeleton, per API_SYSTEM_DESIGN.md and
-NEXUS_SERVER_ARCHITECTURE.md.
+HTTP surface: submit a BOM, get a reviewed report back.
 
-This is a structural skeleton, not a deployed service — it demonstrates
-the routing shape (POST /task -> agent -> result) without live
-authentication, database, or network exposure. Deploying this for real
-requires: the secure-element auth check (AUTHENTICATION_SYSTEM.md), the
-Postgres+pgvector connection (DATABASE_ARCHITECTURE.md), and Redis-backed
-rate limiting (API_SYSTEM_DESIGN.md Section 4) — none of which are wired
-here. This file exists to prove the routing logic works in isolation,
-consistent with sandboxed, incremental testing rather than standing up
-the full stack before any one piece is verified.
+A skeleton, and labelled as one. The routing shape works and is tested
+— API key verification, tier gating, and audit logging of every request
+including rejected ones. It has never been deployed or exposed to a
+network.
+
+What is not here: rate limiting, persistence beyond the in-process audit
+log, and any billing hook. Those become real requirements the day there
+is a paying user, and building them before that is how the previous
+version of this project spent a year at 8% complete.
 """
 
 from fastapi import FastAPI, HTTPException, Header
@@ -20,13 +19,13 @@ import time
 import json
 
 from helix_bom.agent import BOMReviewAgent, Component, DesignConstraints
-from helix_api.auth import TerminalRegistry
+from helix_api.auth import ApiKeyRegistry, extract_bearer
 from helix_api.audit import AuditLog, ActionLogEntry
 
 app = FastAPI(title="HELIX NEXUS Orchestrator (skeleton)")
 
 _agent = BOMReviewAgent()
-_registry = TerminalRegistry()
+_registry = ApiKeyRegistry()
 _audit = AuditLog()  # in-memory SQLite for sandbox testing
 
 
@@ -67,45 +66,37 @@ def health():
 @app.post("/task/bom-review")
 def submit_bom_review(
     request: BOMReviewRequest,
-    x_terminal_id: str = Header(...),
-    x_signature: str = Header(...),
+    authorization: str = Header(None),
     include_synthesis: bool = True,
     tier: str = "basic",
 ):
     """
-    Maps to POST /task in API_SYSTEM_DESIGN.md, specialized to the one
-    agent that currently exists (AI_AGENT_FRAMEWORK.md — one agent first).
-    Authorization tier: read-only per AI_AGENT_FRAMEWORK.md Section 4 —
-    no human authorization gate needed for this specific agent, since it
-    has no consequential-tier actions in scope.
+    Submit a BOM for review. Requires `Authorization: Bearer <api key>`.
 
-    Every request must carry a valid signature (AUTHENTICATION_SYSTEM.md)
-    verified against the terminal registry before the agent runs. Every
-    completed request is written to the audit log
-    (AI_SAFETY_CONSTRAINTS.md Section 3) regardless of outcome.
+    The agent is read-only: it analyses and reports, and takes no action with
+    financial or legal consequence, so no human approval gate sits in front of
+    it. Every request is written to the audit log regardless of outcome —
+    including rejected ones, because a rejection that leaves no trace is
+    indistinguishable from a request that never arrived.
 
-    tier: "basic" (default), "standard", or "senior" — per
-    HELIX_REVENUE_SYSTEM_DESIGN.md Section 6. Gates deliverable DEPTH
-    only, never correctness: the grounding safety net (D-040) applies
-    identically at every tier. Standard/senior visual rendering is not
-    yet implemented (D-041, next build step) — requesting those tiers
-    currently returns the same content as basic plus an explicit note
-    that visual rendering is pending, rather than silently downgrading
-    without saying so.
+    tier: "basic" (default), "standard", or "senior". Gates deliverable DEPTH
+    only, never correctness — the grounding check applies identically at every
+    tier. A cheaper report is shorter, never less true.
     """
     if tier not in ("basic", "standard", "senior"):
         raise HTTPException(status_code=422, detail=f"Unknown tier '{tier}' — must be basic, standard, or senior")
 
-    payload_bytes = request.model_dump_json().encode()
-    signature_bytes = bytes.fromhex(x_signature)
-    ok, reason = _registry.verify_request(x_terminal_id, payload_bytes, signature_bytes)
+    ok, reason = _registry.verify(extract_bearer(authorization))
     if not ok:
         _audit.log(ActionLogEntry(
             agent_name="bom_review_agent", action_type="auth_failure",
             authorization_tier="read-only", summary=f"Rejected: {reason}",
             timestamp=time.time(),
         ))
-        raise HTTPException(status_code=401, detail=f"Authentication failed: {reason}")
+        # The specific reason goes to the audit log, not to the client.
+        # Distinguishing "unknown key" from "revoked key" in the response
+        # tells an attacker which key IDs are real.
+        raise HTTPException(status_code=401, detail="Invalid or missing API key")
 
     try:
         # model_dump(), not dict(): .dict() is deprecated in Pydantic v2 (this

@@ -73,7 +73,7 @@ because it is planned.
 | `src/helix_grounding/` | The verification library — extractors, ground truth, retry loop | Working, 53 tests, two domains |
 | `src/helix_bom/` | BOM review: CSV ingest, deterministic checks, `helix-bom` CLI | Working, 57 tests + 14 sandbox suites |
 | `src/helix_llm/` | Backend-agnostic model client (local Ollama by default, Anthropic optional) | Working, local path unverified end-to-end on this machine |
-| `src/helix_api/` | FastAPI orchestrator with signature auth and audit logging | Skeleton — routes work, not deployed |
+| `src/helix_api/` | FastAPI surface: API key auth, tier gating, audit log | Skeleton — routes work and are tested, never deployed |
 
 ## Running it
 
@@ -102,7 +102,7 @@ clean bill of health. `--strict` turns "could not check" into a non-zero exit,
 which is what you want gating a build. `--json` emits the same information for
 a machine.
 
-138 tests pass, nothing is skipped, and nothing but Python is required. The
+161 tests pass, nothing is skipped, and nothing but Python is required. The
 project has no database and no server dependency — the library and the CLI
 are both stateless.
 
@@ -125,7 +125,7 @@ src/helix_llm/         model client abstraction
 src/helix_api/         HTTP surface
 tests/                 pytest suite
     sandbox/           script-style suites, run as subprocesses
-docs/DECISION_LOG.md   44 decisions with reasoning — read this one
+docs/DECISION_LOG.md   45 decisions with reasoning — read this one
 docs/CASE_STUDY.html   a real caught fabrication, reproducible
 docs/MARKET_RESEARCH.html
 scripts/               developer utilities

@@ -11,7 +11,6 @@ import sys, os
 
 from fastapi.testclient import TestClient
 from helix_api.app import app, _registry, _audit, BOMReviewRequest
-from helix_api.auth import provision_simulated_terminal, sign_request
 from test_bom_review_realistic_scale_sandbox import build_realistic_synthetic_bom
 
 client = TestClient(app)
@@ -44,13 +43,11 @@ def run():
         },
     }
 
-    terminal = provision_simulated_terminal("terminal-realistic-scale-001")
-    _registry.register(terminal.terminal_id, terminal.public_key_pem)
+    issued = _registry.issue("sandbox test key")
 
     model = BOMReviewRequest(**payload)
     payload_bytes = model.model_dump_json().encode()
-    signature = sign_request(terminal.private_key, payload_bytes)
-    headers = {"X-Terminal-Id": terminal.terminal_id, "X-Signature": signature.hex()}
+    headers = {"Authorization": f"Bearer {issued.secret}"}
 
     print(f"=== Full pipeline, realistic {len(components)}-item BOM, through the actual API ===\n")
     r = client.post("/task/bom-review", json=payload, headers=headers)

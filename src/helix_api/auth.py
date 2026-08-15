@@ -1,80 +1,121 @@
 """
-HELIX NEXUS — Authentication layer, per AUTHENTICATION_SYSTEM.md.
+API key authentication.
 
-IMPORTANT SCOPE NOTE: this is a SOFTWARE SIMULATION of the secure-element
-signing flow, for sandbox testing only. On real MK1 hardware, the private
-key is generated on and never leaves the ATECC608B secure element
-(MK1_COMPONENT_SELECTION.md) — the element itself performs signing
-operations. Here, a software ECDSA keypair stands in for that hardware
-so the *verification logic* on the server side can be built and tested
-before any physical terminal exists. Do not treat this module as
-equivalent to real hardware-backed security — it exists to validate the
-server-side half of the flow only.
+This replaces a simulated ECDSA secure-element flow. That code worked, but it
+modelled an ATECC608B on a hardware terminal that was cut from the project —
+so it described a security posture that did not exist, which is worse than a
+simpler scheme that describes itself accurately.
+
+What is here is ordinary and deployable: bearer keys, hashed at rest,
+compared in constant time, revocable.
 """
 
-from dataclasses import dataclass
-from cryptography.hazmat.primitives.asymmetric import ec
-from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.exceptions import InvalidSignature
+from __future__ import annotations
+
+import hashlib
+import hmac
+import secrets
+from dataclasses import dataclass, field
+
+KEY_PREFIX = "helix_sk_"
+_PREVIEW_CHARS = 6
+
+
+def _hash(key: str) -> str:
+    """Keys are stored hashed, never in plaintext.
+
+    The property this buys: a leaked key store is not a leaked set of keys.
+    Anyone reading the registry — a backup, a log, a compromised disk — gets
+    digests they cannot present as credentials.
+    """
+    return hashlib.sha256(key.encode("utf-8")).hexdigest()
+
+
+@dataclass(frozen=True)
+class IssuedKey:
+    """The one moment the plaintext key exists outside the caller's hands.
+
+    ``secret`` is never stored and cannot be recovered. Losing it means
+    issuing a new key, which is the correct trade: a system that can show you
+    your key again is a system that can show it to someone else.
+    """
+
+    key_id: str
+    secret: str
+    label: str
+
+    @property
+    def preview(self) -> str:
+        """Safe to log and to show in a UI: enough to identify which key,
+        not enough to use one."""
+        return f"{self.key_id} ({self.secret[len(KEY_PREFIX):][:_PREVIEW_CHARS]}...)"
 
 
 @dataclass
-class TerminalIdentity:
-    terminal_id: str
-    private_key: object  # ec.EllipticCurvePrivateKey — simulated secure element
-    public_key_pem: bytes
+class _Record:
+    key_id: str
+    digest: str
+    label: str
+    revoked: bool = False
 
 
-def provision_simulated_terminal(terminal_id: str) -> TerminalIdentity:
-    """
-    Simulates initial terminal provisioning. On real hardware this key is
-    generated inside the ATECC608B and the private key never leaves it —
-    simulated here in software so the registry/verification logic below
-    can be tested without physical hardware.
-    """
-    private_key = ec.generate_private_key(ec.SECP256R1())
-    public_key_pem = private_key.public_key().public_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PublicFormat.SubjectPublicKeyInfo,
-    )
-    return TerminalIdentity(terminal_id, private_key, public_key_pem)
+@dataclass
+class ApiKeyRegistry:
+    """In-memory key store.
 
-
-def sign_request(private_key, payload: bytes) -> bytes:
-    """Simulated equivalent of the secure element signing a request."""
-    return private_key.sign(payload, ec.ECDSA(hashes.SHA256()))
-
-
-class TerminalRegistry:
-    """
-    Server-side registry of terminal_id -> public key, per
-    AUTHENTICATION_SYSTEM.md. Real deployment stores this in Postgres
-    (DATABASE_ARCHITECTURE.md); in-memory dict here for sandbox testing.
+    Deliberately in-memory: the project has no database, and inventing one to
+    hold three keys would repeat the mistake this module is fixing. Swapping
+    the dict for a table is a small change on the day there is a table.
     """
 
-    def __init__(self):
-        self._registry: dict[str, bytes] = {}
-        self._revoked: set[str] = set()
+    _by_id: dict[str, _Record] = field(default_factory=dict)
 
-    def register(self, terminal_id: str, public_key_pem: bytes) -> None:
-        self._registry[terminal_id] = public_key_pem
+    def issue(self, label: str = "") -> IssuedKey:
+        """Mint a key. The plaintext is returned once and never retained."""
+        key_id = "key_" + secrets.token_hex(6)
+        secret = KEY_PREFIX + secrets.token_urlsafe(32)
+        self._by_id[key_id] = _Record(key_id, _hash(secret), label)
+        return IssuedKey(key_id=key_id, secret=secret, label=label)
 
-    def revoke(self, terminal_id: str) -> None:
-        """Per AUTHENTICATION_SYSTEM.md Section 4 — lost/stolen terminal
-        handling. Revocation is permanent; re-provisioning requires a new
-        terminal_id, not un-revoking the old one."""
-        self._revoked.add(terminal_id)
+    def revoke(self, key_id: str) -> None:
+        """Revocation is permanent. Re-enabling a key that may have leaked is
+        never the right recovery — issue a new one."""
+        record = self._by_id.get(key_id)
+        if record is not None:
+            record.revoked = True
 
-    def verify_request(self, terminal_id: str, payload: bytes, signature: bytes) -> tuple[bool, str]:
-        if terminal_id in self._revoked:
-            return False, "terminal_id has been revoked"
-        public_key_pem = self._registry.get(terminal_id)
-        if public_key_pem is None:
-            return False, "unknown terminal_id"
+    def verify(self, presented: str) -> tuple[bool, str]:
+        """Check a presented key. Returns (ok, reason).
 
-        public_key = serialization.load_pem_public_key(public_key_pem)
-        try:
-            public_key.verify(signature, payload, ec.ECDSA(hashes.SHA256()))
-            return True, "ok"
-        except InvalidSignature:
-            return False, "invalid signature"
+        The reason is for the audit log, not for the caller: telling a client
+        whether a key is unknown or merely revoked hands an attacker a way to
+        enumerate valid key IDs. The HTTP layer collapses every failure into
+        one response.
+        """
+        if not presented or not presented.startswith(KEY_PREFIX):
+            return False, "malformed key"
+
+        digest = _hash(presented)
+        for record in self._by_id.values():
+            # compare_digest, not ==, so the time taken does not depend on how
+            # many leading characters matched. Comparing digests rather than
+            # raw keys also means a timing signal would leak nothing usable.
+            if hmac.compare_digest(record.digest, digest):
+                if record.revoked:
+                    return False, f"key {record.key_id} is revoked"
+                return True, record.key_id
+        return False, "unknown key"
+
+
+def extract_bearer(header_value: str | None) -> str:
+    """Pull the credential out of an ``Authorization: Bearer <key>`` header.
+
+    Tolerates a bare key without the scheme, because clients send it that way
+    and rejecting it teaches nothing — the key is still checked on its merits.
+    """
+    if not header_value:
+        return ""
+    value = header_value.strip()
+    if value.lower().startswith("bearer "):
+        return value[7:].strip()
+    return value

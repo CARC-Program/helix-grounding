@@ -196,12 +196,18 @@ flip `force_cpu=False` and use a larger model when the GPU frees up.
 
 ## helix_api
 
-A skeleton, and labelled as one. The routing shape works and is tested:
-signature verification against a terminal registry, tier gating, audit logging
-of every request including rejected ones. What is **not** wired: real
-hardware-backed auth (the ECDSA keypair here is a software stand-in for a
-secure element that does not exist), any persistence beyond in-process SQLite,
-and rate limiting. It has never been deployed or exposed to a network.
+A skeleton, and labelled as one. The routing shape works and is tested: API
+key verification, tier gating, audit logging of every request including
+rejected ones. It has never been deployed or exposed to a network.
+
+Auth is ordinary bearer keys — hashed at rest, compared in constant time,
+revocable (D-045). It used to simulate an ECDSA secure element on the MK1
+terminal; that hardware was cut, so the code described a security posture
+that did not exist. The registry is an in-memory dict, which is honest for a
+service with no users.
+
+What is **not** wired: rate limiting, persistence beyond the in-process audit
+log, and any billing hook.
 
 ## Audit logging
 
@@ -218,10 +224,6 @@ There is no Postgres schema any more — see D-044.
 
 Recorded here rather than answered confidently:
 
-- **`helix_api`'s auth models hardware that no longer exists.** With the
-  cyberdeck cut, the terminal registry is a solution to a problem the project
-  does not have. If the product is a library and a hosted API, ordinary API-key
-  auth is the honest replacement.
 - **The local model path has not been verified end-to-end on this machine.**
   Its "server unreachable" branch is genuinely tested; a full round trip with
   real weights has not been run here.

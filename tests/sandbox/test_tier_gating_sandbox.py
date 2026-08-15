@@ -8,7 +8,6 @@ import sys, os
 
 from fastapi.testclient import TestClient
 from helix_api.app import app, _registry
-from helix_api.auth import provision_simulated_terminal, sign_request
 from helix_api.app import BOMReviewRequest
 
 client = TestClient(app)
@@ -25,17 +24,13 @@ PAYLOAD = {
 }
 
 
-def signed_headers(terminal):
-    model = BOMReviewRequest(**PAYLOAD)
-    payload_bytes = model.model_dump_json().encode()
-    signature = sign_request(terminal.private_key, payload_bytes)
-    return {"X-Terminal-Id": terminal.terminal_id, "X-Signature": signature.hex()}
+def auth_headers(issued):
+    return {"Authorization": f"Bearer {issued.secret}"}
 
 
 def run():
-    terminal = provision_simulated_terminal("terminal-tier-test-001")
-    _registry.register(terminal.terminal_id, terminal.public_key_pem)
-    headers = signed_headers(terminal)
+    issued = _registry.issue("sandbox test key")
+    headers = auth_headers(issued)
 
     print("=== Invalid tier rejected ===")
     r = client.post("/task/bom-review?tier=platinum", json=PAYLOAD, headers=headers)

@@ -71,9 +71,6 @@ through it and gets a report back.*
 
 Ordered by evidence, not appeal.
 
-- **Replace terminal-signature auth with API keys.** `helix_api.auth` models a
-  secure element on hardware that was cut. It is a well-built solution to a
-  problem the project no longer has.
 - **Verify the local model path end-to-end.** The unreachable-server branch is
   genuinely tested; a full round trip with real weights has not been run on
   this machine.

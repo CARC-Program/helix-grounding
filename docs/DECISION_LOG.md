@@ -1414,3 +1414,42 @@ business.
 are stateless. A database becomes a real requirement the day there is a
 hosted service with users, and the schema for that should be written then,
 against what that service actually stores — not inherited from this one.
+
+## D-045 — Secure-element auth simulation replaced with API keys
+
+**Decision:** `helix_api/auth.py` no longer simulates an ATECC608B secure
+element signing requests with ECDSA. It issues, verifies and revokes ordinary
+bearer API keys.
+
+**Why:** the ECDSA code worked, and its verification logic was genuinely
+tested. What was wrong was what it claimed. It modelled a hardware root of
+trust on the MK1 terminal — hardware cut from the project when the cyberdeck
+was abandoned. Software simulating a secure element that will never exist
+provides none of a secure element's properties, while reading in the source
+as though it does. A scheme that describes itself accurately is worth more
+than a stronger-sounding one that does not.
+
+**What replaced it, and the properties that actually hold:**
+keys hashed with SHA-256 at rest, so a leaked key store is not a leaked set
+of keys; `hmac.compare_digest` rather than `==`, so match time does not
+depend on how many leading characters matched; plaintext returned exactly
+once at issue and never recoverable; revocation permanent, because
+re-enabling a key that may have leaked is never the right recovery.
+
+**One deliberate asymmetry:** `verify()` returns a specific reason, and the
+endpoint discards it. Telling a caller whether a key is unknown or merely
+revoked lets an attacker enumerate valid key IDs. The reason goes to the
+audit log, where it is useful; the client gets one undifferentiated 401.
+
+**Net effect on the codebase:** smaller. Roughly 80 lines of key generation
+and signature verification became about 50 lines of key handling, and three
+sandbox tests got simpler — they now issue a key instead of provisioning a
+terminal and signing a payload.
+
+**Cost impact:** none. No new dependency; `hashlib`, `hmac` and `secrets` are
+stdlib.
+
+**Future implications:** the registry is an in-memory dict. That is honest
+for a service with no users and no database — swapping it for a table is a
+small change on the day there is a table. What must not happen is inventing
+a database to hold three keys, which is the mistake D-044 just corrected.

@@ -21,6 +21,7 @@ from .agent import BOMReviewAgent, DesignConstraints
 from .ingest import load_bom
 
 SEVERITY_ORDER = {"critical": 0, "warning": 1, "info": 2}
+SAMPLE_BOM = Path(__file__).parent / "examples" / "sample_bom.csv"
 EXIT_OK, EXIT_FINDINGS, EXIT_UNREADABLE = 0, 1, 2
 
 
@@ -151,6 +152,19 @@ def main(argv: list[str] | None = None) -> int:
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
+    # `demo` exists because of where people give up. Installing succeeds, and
+    # then the tool asks for a file they have to go and find -- so the first
+    # thing they see is a prompt for homework rather than output. A bundled
+    # sample means the gap between installing and understanding what this does
+    # is one command with no arguments.
+    demo = sub.add_parser(
+        "demo", help="review a bundled example BOM (no file needed)")
+    demo.add_argument("--json", action="store_true", help="emit JSON instead of text")
+    demo.add_argument("--show-ignored-columns", action="store_true",
+                      help="list columns that matched no known field")
+    demo.add_argument("--strict", action="store_true",
+                      help="exit non-zero if any check could not run")
+
     review = sub.add_parser("review", help="review a BOM CSV file")
     review.add_argument("file", type=Path, help="BOM export (CSV, from KiCad, Altium, or a spreadsheet)")
     review.add_argument("--budget", type=float, default=0.0, metavar="USD",
@@ -166,6 +180,20 @@ def main(argv: list[str] | None = None) -> int:
                         help="exit non-zero if any check could not run")
 
     args = parser.parse_args(argv)
+
+    if args.command == "demo":
+        # Constraints chosen so the sample shows all three outcomes at once:
+        # a budget it breaches, checks that pass, and checks that cannot run
+        # because a real EDA export carries no dimensions or power figures.
+        args.file = SAMPLE_BOM
+        args.budget, args.power, args.enclosure = 12.00, 0.0, None
+        if not args.json:
+            # Human-facing only. Printed ahead of --json output it would sit
+            # above the document and make it unparseable -- a caught bug, and
+            # the general rule it came from: machine output is the whole of
+            # stdout or it is not machine output.
+            print(f"Reviewing the bundled example: {SAMPLE_BOM.name}")
+            print("Run `helix-bom review <your file>.csv` against your own BOM.\n")
 
     try:
         components, report = load_bom(args.file)

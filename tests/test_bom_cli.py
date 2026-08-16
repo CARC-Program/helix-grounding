@@ -162,3 +162,53 @@ def test_a_header_only_file_is_not_a_silent_empty_review(tmp_path, capsys):
 
     assert code == EXIT_UNREADABLE
     assert "no data rows" in capsys.readouterr().err
+
+
+# --------------------------------------------------------------------
+# The demo — first thing a new user runs
+# --------------------------------------------------------------------
+
+def test_demo_runs_with_no_arguments_at_all(capsys):
+    """The gap between `pip install` and understanding what this does has to
+    be one command with no homework. Somebody who has to go and find a CSV
+    before seeing any output is somebody who closes the terminal."""
+    code = main(["demo"])
+    out = capsys.readouterr().out
+
+    assert code == EXIT_FINDINGS          # the sample is deliberately over budget
+    assert "BOM total: $15.08" in out
+    assert "NOT CHECKED" in out
+
+
+def test_demo_shows_all_three_outcomes_at_once(capsys):
+    """A sample that only demonstrates success teaches nothing. This one has
+    a finding, a supply-chain warning, and checks that cannot run."""
+    main(["demo"])
+    out = capsys.readouterr().out
+
+    assert "[CRITICAL]" in out
+    assert "lead time of 126 days" in out
+    assert "physical fit" in out
+
+
+def test_demo_points_the_user_at_their_own_file(capsys):
+    main(["demo"])
+
+    assert "your own BOM" in capsys.readouterr().out
+
+
+def test_demo_supports_json_too(capsys):
+    main(["demo", "--json"])
+    payload = json.loads(capsys.readouterr().out)
+
+    assert payload["totals"]["line_items"] == 10
+    assert payload["over_budget"] is True
+
+
+def test_the_bundled_sample_actually_ships_inside_the_package():
+    """A demo that depends on a file outside the installed package works on
+    the developer's machine and nowhere else."""
+    from helix_bom.cli import SAMPLE_BOM
+
+    assert SAMPLE_BOM.is_file()
+    assert "helix_bom" in SAMPLE_BOM.parts

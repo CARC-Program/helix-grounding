@@ -18,6 +18,7 @@ judgement, no confidence score.**
 
 ```bash
 pip install helix-grounding
+helix-bom demo          # see it catch something, no file needed
 ```
 
 ```python
@@ -38,10 +39,11 @@ same rate.
 
 ---
 
-## See it work in one command
+## See it work on your own file
 
 The package ships a complete worked example: a bill-of-materials reviewer
-built on the library. Point it at a real CSV export.
+built on the library. `helix-bom demo` runs it against a bundled sample;
+point it at your own CSV export when you want a real answer.
 
 ```bash
 helix-bom review my_bom.csv --budget 10
@@ -69,6 +71,21 @@ versus `1,234.56` decided per file rather than per cell.
 
 **A check that couldn't run is never reported as a pass.** `--strict` makes
 "couldn't check" a non-zero exit; `--json` emits the same for a machine.
+
+### Your BOM never leaves your machine
+
+A bill of materials exposes a design, its costs and its suppliers. Reading
+and reviewing one here is **entirely offline** — no upload, no telemetry, no
+account, no network call of any kind.
+
+That is not a promise, it is a test. `tests/test_offline_guarantee.py`
+disables Python's socket layer outright and then runs the real code path
+end to end, so any attempt to reach the network by any library at any depth
+is a hard failure rather than a quiet one. It also asserts the block itself
+works, because a guard that silently stops guarding is worse than none.
+
+The only component that can reach out is the optional narrative writer, and
+it defaults to a model running on your own hardware.
 
 ---
 

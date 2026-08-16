@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: What this library deliberately cannot do
+    url: https://github.com/CARC-Program/helix-grounding#what-it-cant-do
+    about: Judgement claims, word-form amounts and relative dates are out of scope by design — worth checking before filing.

@@ -116,6 +116,12 @@ words will land better than a polished version in mine.
 > it misreads your header, mangles a price, or misses something obvious, that
 > is what I want to hear.
 >
+> You do not have to send me your BOM to report that. `helix-bom diagnose
+> your_bom.csv` prints the structure and none of the contents — encoding,
+> delimiter, column mapping, and the shape of anything that failed to parse.
+> Safe to paste in public, and there is a test that fails if component data
+> ever reaches it.
+>
 > One thing it deliberately does: it tells you which checks it *could not*
 > run. A standard export has no dimensions or power figures, so those checks
 > get skipped — and a report that stayed quiet about that would read as a
@@ -182,8 +188,10 @@ volunteer it.
 
 ## Handling what comes back
 
-**Someone reports a bug.** Best possible outcome. Reproduce it, write a test
-that fails, fix it, reply with the commit. That reply is worth more than the
+**Someone reports a bug.** Best possible outcome. Ask for `helix-bom
+diagnose` output if they have not already sent it — it is designed so they
+can, and asking for the file itself is the thing that ends the conversation.
+Then reproduce it, write a test that fails, fix it, reply with the commit. That reply is worth more than the
 original post — it is public evidence you are someone who fixes things.
 
 **Someone says "it worked, nothing to report."** Ask one question: *did it

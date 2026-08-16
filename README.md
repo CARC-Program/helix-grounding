@@ -72,6 +72,18 @@ versus `1,234.56` decided per file rather than per cell.
 **A check that couldn't run is never reported as a pass.** `--strict` makes
 "couldn't check" a non-zero exit; `--json` emits the same for a machine.
 
+**If it reads your file wrong, don't send me the file.** Send this instead:
+
+```bash
+helix-bom diagnose my_bom.csv
+```
+
+It prints the structure — encoding, delimiter, which line the header was
+found on, how each column mapped, and the *shape* of any cell that failed to
+parse (`21 chars, letters`) rather than its contents. Safe to paste into a
+public issue. There is a test that fails if any component data ever reaches
+that output.
+
 ### Your BOM never leaves your machine
 
 A bill of materials exposes a design, its costs and its suppliers. Reading

@@ -116,6 +116,10 @@ class IngestReport:
     rows_skipped_dnp: int = 0
     rows_skipped_empty: int = 0
     decimal_separator: str = "."
+    encoding: str = "utf-8"
+    size_bytes: int = 0
+    total_rows: int = 0
+    headers: list = field(default_factory=list)
 
     @property
     def rows_used(self) -> int:
@@ -214,16 +218,22 @@ def _looks_like_header(cells: list[str]) -> int:
     return sum(1 for cell in cells if _normalise(cell) in known)
 
 
-def _read_text(path: Path) -> str:
+def _read_text(path: Path) -> tuple[str, str]:
     """Excel writes a BOM; older tools write Latin-1. Try in that order and
-    fall back rather than dying on a stray accented character."""
+    fall back rather than dying on a stray accented character.
+
+    Returns the text and which encoding worked, because "it decoded as
+    cp1252" is often the whole explanation for a mangled part number, and
+    a diagnostic that omits it sends the reporter looking in the wrong
+    place.
+    """
     data = path.read_bytes()
     for encoding in ("utf-8-sig", "utf-8", "cp1252", "latin-1"):
         try:
-            return data.decode(encoding)
+            return data.decode(encoding), encoding
         except UnicodeDecodeError:
             continue
-    return data.decode("latin-1", errors="replace")
+    return data.decode("latin-1", errors="replace"), "latin-1 (with replacements)"
 
 
 def load_bom(path, max_header_scan: int = 20) -> tuple[list[Component], IngestReport]:
@@ -235,8 +245,9 @@ def load_bom(path, max_header_scan: int = 20) -> tuple[list[Component], IngestRe
     would be worse than saying so.
     """
     path = Path(path)
-    text = _read_text(path)
-    report = IngestReport(source=path.name)
+    text, encoding = _read_text(path)
+    report = IngestReport(source=path.name, encoding=encoding,
+                          size_bytes=path.stat().st_size)
 
     try:
         dialect = csv.Sniffer().sniff(text[:4096], delimiters=",;\t|")
@@ -263,6 +274,8 @@ def load_bom(path, max_header_scan: int = 20) -> tuple[list[Component], IngestRe
 
     header = rows[best_index]
     report.header_row = best_index + 1
+    report.headers = [c.strip() for c in header if c.strip()]
+    report.total_rows = len(rows)
 
     # --- map columns to fields -------------------------------------
     normalised = {_normalise(cell): index for index, cell in enumerate(header) if cell.strip()}

@@ -1,0 +1,58 @@
+name: My BOM was read wrong
+description: The tool misread a column, a price, a quantity, or the header row
+title: "[BOM] "
+labels: ["ingest"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Do not attach your BOM.** It names your suppliers, exposes your
+        costs, and describes your design. Nothing here needs it.
+
+        Run this instead — it prints the file's *structure* and none of its
+        contents. No part numbers, no prices, no quantities, no descriptions:
+
+        ```
+        helix-bom diagnose your_bom.csv
+        ```
+
+        You can read the whole thing before pasting it. If a column *heading*
+        happens to name something confidential, edit that line.
+
+  - type: textarea
+    id: diagnostic
+    attributes:
+      label: Diagnostic output
+      description: The full output of `helix-bom diagnose`.
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What should have happened?
+      description: |
+        The specific thing it got wrong. "It mapped `Ext. Price` to unit price
+        but that column is the line total" is enough to fix — much more useful
+        than "the total is wrong".
+      placeholder: |
+        e.g. It read my quantity column as 1 for every row.
+        e.g. It skipped the header entirely and treated row 1 as data.
+        e.g. My prices are in GBP and it read 1.234,56 as 1.23.
+    validations:
+      required: true
+
+  - type: input
+    id: tool
+    attributes:
+      label: What exported the file?
+      placeholder: KiCad 8, Altium, Excel, our internal ERP, hand-typed...
+    validations:
+      required: false
+
+  - type: markdown
+    attributes:
+      value: |
+        Thank you — genuinely. A parser is only as good as the range of files
+        it has met, and this one has met far fewer than exist.

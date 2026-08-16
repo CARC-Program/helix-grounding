@@ -112,6 +112,113 @@ def _render(components, report, result, constraints, show_all_columns: bool) -> 
     return "\n".join(lines)
 
 
+def _describe_value(value: str) -> str:
+    """Describe a cell's shape without repeating its contents.
+
+    A diagnostic is useless if nobody dares run it. The whole point of the
+    report is that it can be pasted into a public bug tracker, and a cell that
+    failed to parse may be a part number, a supplier code or a price -- the
+    exact things a company will not publish. Its *shape* is what debugs the
+    parser anyway: length, whether it held digits, whether separators were
+    present. The content adds nothing a maintainer needs.
+    """
+    if not value:
+        return "empty"
+    kinds = []
+    if any(c.isdigit() for c in value):
+        kinds.append("digits")
+    if any(c.isalpha() for c in value):
+        kinds.append("letters")
+    for symbol, name in ((",", "comma"), (".", "dot"), ("$", "currency symbol"),
+                         ("€", "currency symbol"), ("£", "currency symbol"),
+                         ("%", "percent"), ("(", "bracket")):
+        if symbol in value and name not in kinds:
+            kinds.append(name)
+    return f"{len(value)} chars, " + (", ".join(kinds) if kinds else "no digits or letters")
+
+
+def _render_diagnostic(report, result, components) -> str:
+    """A bug report a company can paste in public.
+
+    Structure only: what the file looked like and what the parser made of it.
+    No part numbers, no prices, no quantities, no descriptions.
+    """
+    import platform
+    import sys as _sys
+
+    lines: list[str] = []
+    add = lines.append
+
+    add("helix-bom diagnostic report")
+    add("=" * 60)
+    add("")
+    add("Safe to paste into a public bug report. Contains no component data —")
+    add("no part numbers, prices, quantities or descriptions. Column *headings*")
+    add("are included because the parser matches on them; if a heading itself")
+    add("names something confidential, edit it before posting.")
+    add("")
+
+    try:
+        from importlib.metadata import version
+        installed = version("helix-grounding")
+    except Exception:
+        installed = "unknown (running from source?)"
+
+    add(f"helix-grounding   {installed}")
+    add(f"python            {_sys.version.split()[0]}")
+    add(f"platform          {platform.system()} {platform.machine()}")
+    add("")
+
+    add("file")
+    add(f"  size            {report.size_bytes:,} bytes")
+    add(f"  encoding        {report.encoding}")
+    add(f"  delimiter       {report.delimiter!r}")
+    add(f"  header row      line {report.header_row} of {report.total_rows}")
+    add(f"  data rows       {report.rows_read} read, {report.rows_used} used")
+    if report.rows_skipped_dnp:
+        add(f"  excluded        {report.rows_skipped_dnp} do-not-populate")
+    add(f"  number format   decimal separator {report.decimal_separator!r}")
+    add("")
+
+    add(f"headers found ({len(report.headers)})")
+    for index, heading in enumerate(report.headers, start=1):
+        add(f"  {index:>2}  {heading}")
+    add("")
+
+    add(f"columns matched ({len(report.mapped)})")
+    for field_name, source in report.mapped.items():
+        flag = "  [ambiguous]" if source in report.ambiguous else ""
+        add(f"  {source:<28} -> {field_name}{flag}")
+    if report.unmapped_headers:
+        add("")
+        add(f"columns ignored ({len(report.unmapped_headers)})")
+        for heading in report.unmapped_headers:
+            add(f"  {heading}")
+    add("")
+
+    ran = BOMReviewAgent.TOTAL_CHECKS - len(result.skipped_checks)
+    add(f"checks that could run   {ran} of {BOMReviewAgent.TOTAL_CHECKS}")
+    for skipped in result.skipped_checks:
+        add(f"  skipped  {skipped.name}")
+    add("")
+
+    if report.problems:
+        add(f"cells that could not be read ({len(report.problems)})")
+        for problem in report.problems[:20]:
+            add(f"  row {problem.row}, column {problem.column!r}: "
+                f"{_describe_value(problem.value)}")
+        if len(report.problems) > 20:
+            add(f"  ...and {len(report.problems) - 20} more")
+    else:
+        add("cells that could not be read   none")
+    add("")
+
+    add("What did it get wrong? Describe the expected result below —")
+    add("a corrected total, the right column mapping, whatever it missed.")
+
+    return "\n".join(lines)
+
+
 def _as_dict(components, report, result) -> dict:
     return {
         "source": report.source,
@@ -165,6 +272,16 @@ def main(argv: list[str] | None = None) -> int:
     demo.add_argument("--strict", action="store_true",
                       help="exit non-zero if any check could not run")
 
+    # `diagnose` exists so a bug report is possible at all. The ask in
+    # FIRST_USERS.md is "try to break it and tell me" -- but a BOM is
+    # commercially sensitive, so nobody can attach the file that broke it.
+    # This prints the structure and none of the contents.
+    diagnose = sub.add_parser(
+        "diagnose",
+        help="print a shareable report about how a file was parsed "
+             "(no component data)")
+    diagnose.add_argument("file", type=Path, help="the BOM that was read wrongly")
+
     review = sub.add_parser("review", help="review a BOM CSV file")
     review.add_argument("file", type=Path, help="BOM export (CSV, from KiCad, Altium, or a spreadsheet)")
     review.add_argument("--budget", type=float, default=0.0, metavar="USD",
@@ -180,6 +297,10 @@ def main(argv: list[str] | None = None) -> int:
                         help="exit non-zero if any check could not run")
 
     args = parser.parse_args(argv)
+
+    if args.command == "diagnose":
+        args.budget, args.power, args.enclosure = 0.0, 0.0, None
+        args.json = args.strict = args.show_ignored_columns = False
 
     if args.command == "demo":
         # Constraints chosen so the sample shows all three outcomes at once:
@@ -222,6 +343,9 @@ def main(argv: list[str] | None = None) -> int:
         components, constraints, available_fields=set(report.mapped)
     )
 
+    if args.command == "diagnose":
+        print(_render_diagnostic(report, result, components))
+        return EXIT_OK
     if args.json:
         print(json.dumps(_as_dict(components, report, result), indent=2))
     else:

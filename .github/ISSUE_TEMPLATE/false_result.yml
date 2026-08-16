@@ -1,0 +1,55 @@
+name: It flagged something correct (or missed something wrong)
+description: The grounding check produced a false positive or a false negative
+title: "[grounding] "
+labels: ["grounding"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Both directions matter, and they matter differently.
+
+        A **false positive** — flagging a value that was genuinely in your
+        source data — is the more damaging of the two. It burns the retry
+        budget, suppresses output that was correct, and teaches you to ignore
+        the checker. Those get fixed first.
+
+        A **false negative** — a fabricated value that slipped through — is a
+        gap in the guarantee, and the README lists the ones already known
+        (amounts written as words, relative dates, judgement claims). If yours
+        is not on that list, it is a bug.
+
+  - type: dropdown
+    id: direction
+    attributes:
+      label: Which way?
+      options:
+        - False positive — it flagged a value that was really in my data
+        - False negative — it missed a value the model made up
+    validations:
+      required: true
+
+  - type: textarea
+    id: text
+    attributes:
+      label: The text that was checked
+      description: Redact freely — replace real figures with different ones of the same shape if you need to. $1,234.56 behaves the same as $9,999.99.
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: truth
+    attributes:
+      label: How you built the GroundTruth
+      description: The adapter call, or the allow_* calls you made. Redacted values are fine as long as they match the text above.
+      render: python
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      placeholder: "output of: pip show helix-grounding"
+    validations:
+      required: false

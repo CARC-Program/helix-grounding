@@ -57,8 +57,10 @@ through it and gets a report back.*
       refused rather than guessed at
 - [x] **Never report a check that did not run as a pass.** The agent now
       names each skipped check and what it needs
-- [ ] Get it in front of one hardware maker who has never spoken to the
-      author. Everything above is preparation; this is the milestone
+- [ ] Get it in front of hardware makers who have never spoken to the
+      author. Everything above is preparation; this is the milestone.
+      Playbook in `docs/FIRST_USERS.md` — the ask is a bug report, not a
+      sale, which is a far easier thing to say and to hear
 - [x] Publish one real caught fabrication as a case study — `docs/CASE_STUDY.html`,
       reproducible via `scripts/reproduce_d036.py` and asserted by the test
       suite, so the claims cannot quietly stop being true

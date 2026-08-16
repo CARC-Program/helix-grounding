@@ -49,9 +49,9 @@ llm = ["ollama>=0.3", "anthropic>=0.40", "python-dotenv>=1.0"]
 dev = ["pytest>=8", "build", "twine"]
 
 [project.urls]
-Documentation = "https://github.com/bobby/helix-grounding#readme"
-Source = "https://github.com/bobby/helix-grounding"
-Changelog = "https://github.com/bobby/helix-grounding/blob/main/docs/DECISION_LOG.md"
+Documentation = "https://github.com/CARC-Program/helix-grounding#readme"
+Source = "https://github.com/CARC-Program/helix-grounding"
+Changelog = "https://github.com/CARC-Program/helix-grounding/blob/main/docs/DECISION_LOG.md"
 
 [project.scripts]
 helix-bom = "helix_bom.cli:main"

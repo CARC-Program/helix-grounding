@@ -304,3 +304,116 @@ def test_physical_fit_still_fires_when_dimensions_are_present():
     )
 
     assert any("exceeds enclosure width" in f.message for f in result.findings)
+
+
+# --------------------------------------------------------------------
+# Bugs found by testing against realistic files before publishing
+# --------------------------------------------------------------------
+
+def test_sub_cent_prices_are_not_read_as_thousands(tmp_path):
+    """BUG: "0.008" matched the European thousands pattern, so a file full of
+    sub-cent passive pricing — which is to say every real electronics BOM —
+    was detected as European and every price multiplied by a thousand. A
+    $15.60 BOM totalled $15,603.00.
+
+    Nobody writes eight as a thousands-grouped "0.008". A grouped number
+    never begins with a zero group."""
+    path = tmp_path / "subcent.csv"
+    path.write_text(
+        "Description,Qty,Unit Price\n"
+        "Resistor,6,0.008\n"
+        "Capacitor,4,0.021\n"
+        "MCU,1,7.930\n"
+    )
+
+    components, report = load_bom(path)
+
+    assert report.decimal_separator == "."
+    assert sum(c.cost_usd * c.quantity for c in components) == pytest.approx(8.062)
+
+
+def test_a_spreadsheet_totals_row_is_not_counted_as_a_part(tmp_path):
+    """BUG: purchasing departments leave a TOTAL row at the bottom. It was
+    read as a line item, inflating the part count — and had its cost column
+    held the extended total, it would have doubled the BOM."""
+    path = tmp_path / "totals.csv"
+    path.write_text(
+        "Designator,Description,Qty,Unit Price,MPN\n"
+        "R1,Resistor,2,0.10,RC-1\n"
+        "C1,Capacitor,3,0.20,GRM-1\n"
+        ",TOTAL,5,,\n"
+    )
+
+    components, report = load_bom(path)
+
+    assert report.rows_skipped_totals == 1
+    assert len(components) == 2
+    assert sum(c.quantity for c in components) == 5
+
+
+def test_a_real_part_whose_name_contains_total_is_kept(tmp_path):
+    """The totals check must not eat components. A row with a part number and
+    a designator is a part, whatever its description says."""
+    path = tmp_path / "namedtotal.csv"
+    path.write_text(
+        "Designator,Description,Qty,Unit Price,MPN\n"
+        "U1,Total Phase Beagle I2C probe,1,320.00,TP-323\n"
+    )
+
+    components, report = load_bom(path)
+
+    assert report.rows_skipped_totals == 0
+    assert len(components) == 1
+
+
+def test_a_value_that_defies_the_files_convention_is_refused_not_coerced(tmp_path):
+    """BUG: in a US-convention file, "2,50" had its comma stripped as a
+    thousands separator and became 250 — a hundredfold error, silently. A
+    thousands group is exactly three digits, so "2,50" is not valid US
+    notation at all and should be reported rather than guessed at."""
+    path = tmp_path / "mixed.csv"
+    path.write_text(
+        "Description,Qty,Unit Price\n"
+        "Widget,1,0.012\n"
+        "Gadget,1,0.089\n"
+        "Oddity,1,\"2,50\"\n"
+    )
+
+    components, report = load_bom(path)
+
+    assert len(report.problems) == 1
+    assert "number format" in report.problems[0].problem
+    assert components[2].cost_usd == 0.0            # excluded, not invented
+    assert sum(c.cost_usd for c in components) == pytest.approx(0.101)
+
+
+def test_genuine_thousands_still_parse_after_the_stricter_check(tmp_path):
+    """The refusal must not reject correctly-formatted large numbers."""
+    path = tmp_path / "big.csv"
+    path.write_text(
+        "Description,Qty,Unit Price\n"
+        "Instrument,1,\"12,499.99\"\n"
+        "Cable,2,\"1,250.00\"\n"
+    )
+
+    components, report = load_bom(path)
+
+    assert report.problems == []
+    assert components[0].cost_usd == pytest.approx(12499.99)
+    assert components[1].cost_usd == pytest.approx(1250.00)
+
+
+def test_a_five_hundred_line_bom_stays_correct(tmp_path):
+    """Realistic scale. Every price is sub-cent, which is the case that used
+    to break."""
+    lines = ["Designator,Description,Qty,Unit Price"]
+    for index in range(1, 501):
+        lines.append(f"R{index},Resistor {index},2,0.005")
+    path = tmp_path / "large.csv"
+    path.write_text("\n".join(lines) + "\n")
+
+    components, report = load_bom(path)
+
+    assert len(components) == 500
+    assert report.problems == []
+    assert sum(c.cost_usd * c.quantity for c in components) == pytest.approx(5.00)

@@ -19,7 +19,7 @@ from typing import Any, Iterable, Protocol, runtime_checkable
 
 from ..claims import ClaimKind
 from ..extractors import IdentifierExtractor
-from ..truth import GroundTruth
+from ..truth import GroundTruth  # noqa: F401  (re-exported for adapters)
 
 # Reused for reading identifiers out of the source data, so input and output
 # are parsed by the same rules.

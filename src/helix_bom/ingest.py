@@ -74,6 +74,13 @@ DNP_HEADERS = ("dnp", "donotpopulate", "donotplace", "nofit", "exclude",
                "excludefrombom", "populate")
 DNP_TRUTHY = {"1", "y", "yes", "true", "dnp", "x", "do not populate"}
 
+# Summary rows a spreadsheet leaves at the bottom. Matched after
+# normalisation, so "Total:", "TOTAL" and "grand total" all land here.
+TOTALS_ROW_NAMES = frozenset({
+    "total", "totals", "subtotal", "subtotals", "grandtotal", "sum",
+    "sumtotal", "totalcost", "totalprice", "bomtotal",
+})
+
 
 def _normalise(header: str) -> str:
     """Reduce a header to letters and digits so 'Unit Price ($)', 'unit_price'
@@ -114,6 +121,7 @@ class IngestReport:
     problems: list[RowProblem] = field(default_factory=list)
     rows_read: int = 0
     rows_skipped_dnp: int = 0
+    rows_skipped_totals: int = 0
     rows_skipped_empty: int = 0
     decimal_separator: str = "."
     encoding: str = "utf-8"
@@ -127,7 +135,7 @@ class IngestReport:
         # are never counted in the first place. So exactly one subtraction is
         # correct here — the first version also decremented rows_read on a DNP
         # row and reported one line item fewer than the file contained.
-        return self.rows_read - self.rows_skipped_dnp
+        return self.rows_read - self.rows_skipped_dnp - self.rows_skipped_totals
 
     def summary(self) -> str:
         parts = [
@@ -138,6 +146,8 @@ class IngestReport:
             parts.append(f"{len(self.problems)} unreadable cell(s)")
         if self.rows_skipped_dnp:
             parts.append(f"{self.rows_skipped_dnp} DNP row(s) excluded")
+        if self.rows_skipped_totals:
+            parts.append(f"{self.rows_skipped_totals} summary row(s) excluded")
         return "; ".join(parts)
 
 
@@ -166,9 +176,22 @@ def detect_decimal_separator(samples) -> str:
             european += 3
         elif re.search(r"\d,\d{3}\.\d", text):          # 1,234.56 — decisive
             us += 3
-        elif re.fullmatch(r"\d{1,3}(\.\d{3})+", text):  # 1.000
+        # A leading zero group settles it on its own. "0.008" is eight
+        # thousandths and nothing else: no convention writes eight as a
+        # thousands-grouped "0.008", because a grouped number never begins
+        # with a zero group. This is weighted decisively because electronics
+        # BOMs are full of sub-cent prices, and reading them as thousands
+        # multiplies every one by a thousand -- found on the first realistic
+        # file tested, where a $15.60 BOM totalled $15,603.00.
+        elif re.fullmatch(r"0\.\d+", text):
+            us += 3
+        elif re.fullmatch(r"0,\d+", text):
+            european += 3
+        # Thousands grouping, with the same rule applied: the first group
+        # cannot start with a zero, so "1.000" groups and "0.008" cannot.
+        elif re.fullmatch(r"[1-9]\d{0,2}(\.\d{3})+", text):   # 1.000
             european += 1
-        elif re.fullmatch(r"\d{1,3}(,\d{3})+", text):   # 1,000
+        elif re.fullmatch(r"[1-9]\d{0,2}(,\d{3})+", text):    # 1,000
             us += 1
         elif re.fullmatch(r"\d+,\d{1,2}", text):        # 12,50
             european += 1
@@ -189,6 +212,29 @@ def _parse_money(raw: str, decimal_sep: str = ".") -> float:
         raise ValueError("no digits")
 
     thousands_sep = "," if decimal_sep == "." else "."
+
+    # Refuse a value that does not fit the convention the file established,
+    # rather than coercing it into a plausible-looking number.
+    #
+    # A thousands group is exactly three digits. Under US rules "2,50" is not
+    # a small number written oddly -- it is not valid notation at all, and
+    # stripping the comma turns two-fifty into two hundred and fifty. Silently.
+    # Found on a file that mixed conventions, where a $2 BOM totalled $250.
+    #
+    # Refusing sends it through the row-problem path, so the cell is named in
+    # the report instead of quietly changing the total by a factor of a
+    # hundred. That is this module's whole rule: never guess silently.
+    if thousands_sep in text:
+        body = text.lstrip("-")
+        if not re.fullmatch(
+            rf"\d{{1,3}}(?:{re.escape(thousands_sep)}\d{{3}})+"
+            rf"(?:{re.escape(decimal_sep)}\d+)?", body
+        ):
+            raise ValueError(
+                f"{raw.strip()!r} does not match this file's number format "
+                f"(decimal separator {decimal_sep!r})"
+            )
+
     text = text.replace(thousands_sep, "")
     if decimal_sep != ".":
         text = text.replace(decimal_sep, ".")
@@ -338,16 +384,37 @@ def load_bom(path, max_header_scan: int = 20) -> tuple[list[Component], IngestRe
 
         name = cell("name") or cell("designator") or "(unnamed)"
 
+        # A spreadsheet BOM usually ends in a summary row. Counting it as a
+        # line item inflates the part count, and if its cost column happens to
+        # hold the extended total, it doubles the BOM. Found on the first
+        # realistic file tested, where a 24-part BOM reported 46 parts.
+        #
+        # Conservative on purpose: the name has to *be* a totals word, and the
+        # row must carry no part identifier. A real component called
+        # "Total Phase Beagle I2C probe" has an MPN and a designator, so it
+        # survives; a row reading only "TOTAL" in the description column does
+        # not.
+        if (_normalise(name) in TOTALS_ROW_NAMES
+                and not cell("manufacturer_part_number")
+                and not cell("designator")):
+            report.rows_skipped_totals += 1
+            continue
+
         def number(field_name: str, parser, default):
             raw = cell(field_name)
             if not raw:
                 return default
             try:
                 return parser(raw, report.decimal_separator)
-            except (ValueError, TypeError):
+            except (ValueError, TypeError) as exc:
+                # The parser explains a convention mismatch in its own words;
+                # anything else is just unreadable.
+                detail = str(exc)
+                reason = (detail if "number format" in detail
+                          else "could not be read as a number")
                 report.problems.append(RowProblem(
                     offset, report.mapped.get(field_name, field_name), raw,
-                    "could not be read as a number; treated as missing",
+                    f"{reason}; treated as missing",
                 ))
                 return default
 

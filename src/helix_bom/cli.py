@@ -57,6 +57,8 @@ def _render(components, report, result, constraints, show_all_columns: bool) -> 
             f"({report.header_row - 1} preamble line(s) skipped).")
     if report.rows_skipped_dnp:
         add(f"  {report.rows_skipped_dnp} row(s) excluded as do-not-populate.")
+    if report.rows_skipped_totals:
+        add(f"  {report.rows_skipped_totals} summary/total row(s) excluded.")
     add("")
 
     add("Columns used:")
@@ -177,6 +179,8 @@ def _render_diagnostic(report, result, components) -> str:
     add(f"  data rows       {report.rows_read} read, {report.rows_used} used")
     if report.rows_skipped_dnp:
         add(f"  excluded        {report.rows_skipped_dnp} do-not-populate")
+    if report.rows_skipped_totals:
+        add(f"  excluded        {report.rows_skipped_totals} summary rows")
     add(f"  number format   decimal separator {report.decimal_separator!r}")
     add("")
 
@@ -227,6 +231,7 @@ def _as_dict(components, report, result) -> dict:
             "delimiter": report.delimiter,
             "rows_used": report.rows_used,
             "rows_skipped_dnp": report.rows_skipped_dnp,
+            "rows_skipped_totals": report.rows_skipped_totals,
             "columns_mapped": report.mapped,
             "columns_ambiguous": report.ambiguous,
             "columns_ignored": report.unmapped_headers,

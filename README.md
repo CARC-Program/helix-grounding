@@ -184,13 +184,14 @@ pip install -e ".[dev]"
 pytest
 ```
 
-161 tests, nothing skipped, no database and no services required.
+190 tests, nothing skipped, no database and no services required.
 
 ```
 src/helix_grounding/   the library
     domains/           bom.py, invoice.py — add a vertical here
 src/helix_bom/         the worked example: ingest, checks, CLI
 src/helix_llm/         optional model client (local Ollama, or Anthropic)
+CHANGELOG.md           what changed, and whether you need to re-run anything
 docs/                  decision log, architecture, business model, case study
                        PUBLISHING.md — GitHub + PyPI release checklist
                        FIRST_USERS.md — how to get the first users

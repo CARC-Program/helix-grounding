@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "helix-grounding"
-version = "0.1.0"
+version = "0.1.1"
 description = "Catch the numbers an AI made up, without asking another AI"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -51,7 +51,8 @@ dev = ["pytest>=8", "build", "twine"]
 [project.urls]
 Documentation = "https://github.com/CARC-Program/helix-grounding#readme"
 Source = "https://github.com/CARC-Program/helix-grounding"
-Changelog = "https://github.com/CARC-Program/helix-grounding/blob/main/docs/DECISION_LOG.md"
+Changelog = "https://github.com/CARC-Program/helix-grounding/blob/main/CHANGELOG.md"
+"Decision log" = "https://github.com/CARC-Program/helix-grounding/blob/main/docs/DECISION_LOG.md"
 
 [project.scripts]
 helix-bom = "helix_bom.cli:main"
@@ -66,7 +67,7 @@ packages = [
 ]
 
 [tool.hatch.build.targets.sdist]
-include = ["src/", "tests/", "docs/", "scripts/", "README.md", "LICENSE", "pyproject.toml"]
+include = ["src/", "tests/", "docs/", "scripts/", "README.md", "CHANGELOG.md", "LICENSE", "pyproject.toml"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

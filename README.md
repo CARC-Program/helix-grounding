@@ -69,6 +69,44 @@ It reads what KiCad, Altium and spreadsheets actually export: preamble lines
 before the header, semicolon delimiters, do-not-populate rows, and `1.234,56`
 versus `1,234.56` decided per file rather than per cell.
 
+### Or hand it the schematic instead
+
+A BOM is a shopping list. It says which parts and how many, and it is silent
+on how any of them connect — so a wiring diagram drawn from one is not hard to
+produce, it is impossible. The data is not in the file. Point it at a KiCad
+netlist and that changes:
+
+```bash
+helix-bom review sensor_board.net --diagram board.svg
+```
+
+```
+Interconnect (6 link(s), read from the file — not inferred):
+  U1 <-> U2        I2C_SDA, I2C_SCL
+  J1 <-> U1        USB_DP
+  R1 <-> U1        I2C_SDA
+  ...
+
+Findings:
+  [WARNING] Net 'SENSOR_INT' reaches only U1 pin 12 (PA12). A named net with
+            one connection is a label that was typed but never joined anything.
+```
+
+Every line drawn is a net that exists between pins that are named, so the
+diagram can be checked against the schematic and found wrong. Power and ground
+are left out — they touch nearly every part, and drawing them yields a
+hairball that says less than drawing nothing.
+
+The dangling-label finding is the one worth having. On a schematic printout a
+net label that connected to nothing looks exactly like one that connected, so
+it is invisible to review and trivial to a parser. Labels KiCad generated
+itself (`unconnected-(U1-Pad7)`) are left alone; only a name a person typed is
+flagged.
+
+A netlist carries no prices, no dimensions and no power figures, and no export
+option adds them — so all five BOM checks report themselves as unrun rather
+than passing quietly. Run both files to cover both halves.
+
 **A check that couldn't run is never reported as a pass.** `--strict` makes
 "couldn't check" a non-zero exit; `--json` emits the same for a machine.
 

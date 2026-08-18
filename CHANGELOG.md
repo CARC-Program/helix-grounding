@@ -1,5 +1,55 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+**Read a KiCad netlist, not just a BOM.** `helix-bom review board.net` reads
+the file that knows how the board is wired. A BOM is a shopping list — which
+parts, how many — and it says nothing about how they connect, so a wiring
+diagram drawn from one is not difficult, it is impossible. A netlist has the
+connectivity, and the same review pipeline runs on it unchanged.
+
+The file's contents decide which reader handles it, not its extension, because
+exports get renamed and a CSV called `board.net` should not produce a parse
+error about parentheses.
+
+**`--diagram out.svg`** writes the interconnect. Every line drawn corresponds
+to a net that exists between pins that are named, so the diagram can be
+checked against the schematic and found wrong. Power and ground are excluded —
+they touch nearly every part, and drawing them produces a hairball that says
+less than drawing nothing. Asking for a diagram from a BOM is refused, with a
+pointer to the file that would work, rather than silently producing the empty
+canvas that used to come back.
+
+**Two findings a BOM cannot express.** A *named* net with only one connection
+is flagged: that is a label somebody typed which joined nothing, and on a
+schematic printout it looks exactly like a label that connected. Nets KiCad
+named itself (`unconnected-(U1-Pad7)`, `Net-(R3-Pad1)`, `N$12`) are left alone
+— those are ordinary and already reported by KiCad. Components on no net at
+all are flagged too, except where the reference designator says the part is
+meant to be unconnected, such as a mounting hole or a fiducial.
+
+**`helix-bom diagnose` handles netlists**, and is stricter with them than with
+a CSV. A spreadsheet's column headings are printed because the parser matches
+on them; a netlist's equivalents are net names and part values, which are the
+design itself. Only counts and structure go into that report.
+
+### Changed
+
+Two skipped-check reasons no longer tell you to add a column. That was
+workable advice for a spreadsheet and impossible for a netlist, which has no
+columns at all.
+
+### Fixed
+
+`scripts/export_diagrams.py` ran again. It had been importing modules from a
+folder the 2026-08-14 rebuild deleted, so it crashed on import. Every script
+in `scripts/` is now imported by the test suite, which is what would have
+caught it.
+
+---
+
 ## 0.1.1 — 2026-08-17
 
 > **If you reviewed a BOM with 0.1.0, run it again.** Three parsing bugs

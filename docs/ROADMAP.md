@@ -57,6 +57,10 @@ through it and gets a report back.*
       refused rather than guessed at
 - [x] **Never report a check that did not run as a pass.** The agent now
       names each skipped check and what it needs
+- [x] Accept the file that carries connectivity. A BOM cannot support a
+      wiring diagram — the data is not in it, which was measured, not
+      assumed — so `helix-bom review board.net` reads a KiCad netlist and
+      `--diagram` draws links that exist rather than links that are typical
 - [ ] Get it in front of hardware makers who have never spoken to the
       author. Everything above is preparation; this is the milestone.
       Playbook in `docs/FIRST_USERS.md` — the ask is a bug report, not a
@@ -79,6 +83,16 @@ through it and gets a report back.*
 
 Ordered by evidence, not appeal.
 
+- **Distributor enrichment.** The second half of the direction netlist input
+  started. A netlist review currently runs zero of five checks, because the
+  format carries no prices, no dimensions and no lead times — and prices are
+  what switch the first of them on. This is also the honest answer to "what
+  do I get for reading a netlist", which is currently a diagram and two
+  connectivity findings.
+- **Rethink the tiers before anything is priced.** Standard and Senior were
+  gated on features measured to deliver an empty file on a real export
+  (D-046). What replaced them is not tier-shaped, and pricing a tier that
+  cannot be filled is the error that started this.
 - **Verify the local model path end-to-end.** The unreachable-server branch is
   genuinely tested; a full round trip with real weights has not been run on
   this machine.

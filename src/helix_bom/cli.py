@@ -18,11 +18,39 @@ import sys
 from pathlib import Path
 
 from .agent import BOMReviewAgent, DesignConstraints
+from .diagrams import generate_netlist_interconnect_svg
 from .ingest import load_bom
+from .netlist import connectivity_findings, interconnect_from_nets, load_netlist
 
 SEVERITY_ORDER = {"critical": 0, "warning": 1, "info": 2}
 SAMPLE_BOM = Path(__file__).parent / "examples" / "sample_bom.csv"
 EXIT_OK, EXIT_FINDINGS, EXIT_UNREADABLE = 0, 1, 2
+
+# The Component fields a KiCad netlist actually supplies. Everything else --
+# price, dimensions, power draw, category, lead time -- is absent from the
+# format, not zero in this particular file. Handing the agent this set is what
+# makes it report those checks as unrun instead of silently passing them.
+NETLIST_FIELDS = frozenset({
+    "name", "quantity", "manufacturer", "manufacturer_part_number",
+})
+
+
+def _looks_like_netlist(path: Path) -> bool:
+    """Decide by content, falling back to the extension.
+
+    The extension alone is not enough: people rename exports, and `.net` is
+    also used by other tools. The first meaningful token of a KiCad netlist is
+    always `(export`, so read for that. If the file cannot be read as text at
+    all, defer to the suffix and let the real loader produce the error, which
+    will be a better one than anything guessed at here.
+    """
+    try:
+        head = path.read_text(encoding="utf-8", errors="replace")[:400].lstrip()
+    except OSError:
+        return path.suffix.lower() == ".net"
+    return head.startswith("(export") or (
+        path.suffix.lower() == ".net" and head.startswith("(")
+    )
 
 
 def _parse_enclosure(text: str) -> tuple[float, float, float]:
@@ -255,6 +283,156 @@ def _as_dict(components, report, result) -> dict:
     }
 
 
+def _render_netlist(components, nets, report, result, links, constraints) -> str:
+    """Report a netlist review.
+
+    Deliberately not the same renderer as the CSV path. A netlist has no
+    header row, no delimiter and no column mapping, so reusing that report
+    would mean printing fields that do not exist for this kind of file --
+    which is the same class of dishonesty as reporting an unrun check as a
+    pass, just quieter.
+    """
+    lines: list[str] = []
+    add = lines.append
+
+    add(f"Netlist review — {report.source}")
+    add("=" * 60)
+    add("")
+
+    add(f"Read {report.components} component(s) from the schematic.")
+    if report.tool:
+        add(f"  Exported by      {report.tool}")
+    if report.schematic:
+        add(f"  Schematic        {report.schematic}")
+    add(f"  Nets             {report.nets} "
+        f"({report.signal_nets} signal, {report.power_nets} power/ground)")
+    add("")
+
+    # --- the interconnect ----------------------------------------------
+    if links:
+        add(f"Interconnect ({len(links)} link(s), read from the file — not inferred):")
+        for ref_a, ref_b, names in links:
+            add(f"  {ref_a} <-> {ref_b:<8}  {', '.join(names)}")
+        add("")
+    else:
+        add("Interconnect: no signal net joins two components in this file.")
+        add("")
+
+    if any(c.cost_usd for c in components):
+        add(f"Total: ${result.total_cost_usd:,.2f}"
+            + (f"  (budget ${constraints.budget_usd:,.2f})"
+               if constraints.budget_usd else ""))
+        add("")
+
+    add("Findings:")
+    for finding in sorted(result.findings, key=lambda f: SEVERITY_ORDER.get(f.severity, 9)):
+        add(f"  [{finding.severity.upper()}] {finding.message}")
+    add("")
+
+    # Same rule as the CSV report: last, and never collapsed into a count.
+    # The reason differs though -- a missing column can be supplied, whereas a
+    # netlist structurally does not carry prices, so the remedy is a different
+    # file rather than a better export.
+    if result.skipped_checks:
+        add(f"NOT CHECKED ({len(result.skipped_checks)}):")
+        for skipped in result.skipped_checks:
+            add(f"  {skipped.name}")
+            add(f"      {skipped.reason}")
+        add("")
+        add("  These are not passes. A netlist carries connectivity, not cost,")
+        add("  size, power or category — no export option adds them. Run")
+        add("  `helix-bom review` on your BOM CSV as well to check those.")
+    else:
+        add("All checks ran against the submitted data.")
+
+    return "\n".join(lines)
+
+
+def _as_dict_netlist(components, nets, report, result, links) -> dict:
+    return {
+        "source": report.source,
+        "kind": "netlist",
+        "netlist": {
+            "tool": report.tool,
+            "schematic": report.schematic,
+            "components": report.components,
+            "nets": report.nets,
+            "signal_nets": report.signal_nets,
+            "power_nets": report.power_nets,
+            "unconnected": report.unconnected,
+            "single_node_nets": report.single_node_nets,
+        },
+        "interconnect": [
+            {"a": a, "b": b, "nets": names} for a, b, names in links
+        ],
+        "totals": {
+            "line_items": len(components),
+            "parts": sum(c.quantity for c in components),
+        },
+        "complete": result.is_complete,
+        "findings": [{"severity": f.severity, "message": f.message} for f in result.findings],
+        "skipped_checks": [{"name": s.name, "reason": s.reason} for s in result.skipped_checks],
+    }
+
+
+def _render_diagnostic_netlist(report, result, links) -> str:
+    """The netlist equivalent of the CSV diagnostic: structure, no contents.
+
+    Stricter than it first appears. On a CSV the column *headings* are printed,
+    because the parser matches on them and a heading is rarely secret. A
+    netlist has no headings -- its equivalents are net names and part values,
+    and those are the design. `I2C_SDA` is harmless; `MOTOR_KILL_INTERLOCK`
+    and a part number are not, and no rule can tell them apart. So counts and
+    shapes go in the report and names stay out of it, reference designators
+    aside, which say nothing beyond `there is a fourth resistor`.
+    """
+    import platform
+    import sys as _sys
+
+    lines: list[str] = []
+    add = lines.append
+
+    add("helix-bom diagnostic report (netlist)")
+    add("=" * 60)
+    add("")
+    add("Safe to paste into a public bug report. Contains no net names, no part")
+    add("values and no part numbers — a netlist is the design itself, so only")
+    add("structure is reported here.")
+    add("")
+
+    try:
+        from importlib.metadata import version
+        installed = version("helix-grounding")
+    except Exception:
+        installed = "unknown (running from source?)"
+
+    add(f"helix-grounding   {installed}")
+    add(f"python            {_sys.version.split()[0]}")
+    add(f"platform          {platform.system()} {platform.machine()}")
+    add("")
+
+    add("file")
+    add(f"  format          KiCad netlist (s-expression)")
+    add(f"  exported by     {report.tool or 'not stated in the file'}")
+    add(f"  components      {report.components}")
+    add(f"  nets            {report.nets} "
+        f"({report.signal_nets} signal, {report.power_nets} power/ground)")
+    add(f"  single-node     {len(report.single_node_nets)}")
+    add(f"  unconnected     {len(report.unconnected)} component(s)")
+    add(f"  links drawn     {len(links)}")
+    add("")
+
+    ran = BOMReviewAgent.TOTAL_CHECKS - len(result.skipped_checks)
+    add(f"checks that could run   {ran} of {BOMReviewAgent.TOTAL_CHECKS}")
+    for skipped in result.skipped_checks:
+        add(f"  skipped  {skipped.name}")
+    add("")
+    add("What did it get wrong? Describe the expected result below —")
+    add("the component count, a link it missed, a net it read as power.")
+
+    return "\n".join(lines)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="helix-bom",
@@ -285,10 +463,15 @@ def main(argv: list[str] | None = None) -> int:
         "diagnose",
         help="print a shareable report about how a file was parsed "
              "(no component data)")
-    diagnose.add_argument("file", type=Path, help="the BOM that was read wrongly")
+    diagnose.add_argument("file", type=Path,
+                          help="the BOM or netlist that was read wrongly")
 
-    review = sub.add_parser("review", help="review a BOM CSV file")
-    review.add_argument("file", type=Path, help="BOM export (CSV, from KiCad, Altium, or a spreadsheet)")
+    review = sub.add_parser(
+        "review", help="review a BOM CSV file or a KiCad netlist")
+    review.add_argument(
+        "file", type=Path,
+        help="a BOM export (CSV from KiCad, Altium or a spreadsheet), or a "
+             "KiCad .net netlist")
     review.add_argument("--budget", type=float, default=0.0, metavar="USD",
                         help="cost budget for the whole BOM")
     review.add_argument("--enclosure", type=_parse_enclosure, metavar="WxDxH",
@@ -298,6 +481,13 @@ def main(argv: list[str] | None = None) -> int:
     review.add_argument("--json", action="store_true", help="emit JSON instead of text")
     review.add_argument("--show-ignored-columns", action="store_true",
                         help="list columns that matched no known field")
+    # Netlist input only, and deliberately not ignored on a CSV. A BOM does
+    # not carry connectivity, so a diagram drawn from one is a guess about
+    # what usually connects to what -- which is the thing this stopped
+    # shipping.
+    review.add_argument("--diagram", type=Path, metavar="OUT.svg",
+                        help="write an SVG interconnect diagram (needs a "
+                             "netlist; a BOM carries no connectivity)")
     review.add_argument("--strict", action="store_true",
                         help="exit non-zero if any check could not run")
 
@@ -306,6 +496,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "diagnose":
         args.budget, args.power, args.enclosure = 0.0, 0.0, None
         args.json = args.strict = args.show_ignored_columns = False
+        args.diagram = None
 
     if args.command == "demo":
         # Constraints chosen so the sample shows all three outcomes at once:
@@ -313,6 +504,7 @@ def main(argv: list[str] | None = None) -> int:
         # because a real EDA export carries no dimensions or power figures.
         args.file = SAMPLE_BOM
         args.budget, args.power, args.enclosure = 12.00, 0.0, None
+        args.diagram = None
         if not args.json:
             # Human-facing only. Printed ahead of --json output it would sit
             # above the document and make it unparseable -- a caught bug, and
@@ -321,8 +513,20 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Reviewing the bundled example: {SAMPLE_BOM.name}")
             print("Run `helix-bom review <your file>.csv` against your own BOM.\n")
 
+    # Which kind of file this is decides everything downstream. It is read
+    # from the contents rather than trusted from the extension, because both
+    # formats get renamed, and the cost of guessing wrong is a confusing
+    # error about a header row in a file that never had one.
+    is_netlist = _looks_like_netlist(args.file)
+    nets: list = []
+    links: list = []
+
     try:
-        components, report = load_bom(args.file)
+        if is_netlist:
+            components, nets, report = load_netlist(args.file)
+            links = interconnect_from_nets(nets)
+        else:
+            components, report = load_bom(args.file)
     except FileNotFoundError:
         print(f"helix-bom: no such file: {args.file}", file=sys.stderr)
         return EXIT_UNREADABLE
@@ -331,7 +535,9 @@ def main(argv: list[str] | None = None) -> int:
         return EXIT_UNREADABLE
 
     if not components:
-        print(f"helix-bom: {report.source} has a header but no data rows.", file=sys.stderr)
+        detail = ("parsed, but lists no parts -- no (components ...) block"
+                  if is_netlist else "has a header but no data rows")
+        print(f"helix-bom: {report.source} {detail}.", file=sys.stderr)
         return EXIT_UNREADABLE
 
     width, depth, height = args.enclosure or (0.0, 0.0, 0.0)
@@ -343,16 +549,45 @@ def main(argv: list[str] | None = None) -> int:
         power_budget_w=args.power,
     )
     # The ingest report knows which columns the file actually had, which
-    # is better information than the agent can infer from the values.
+    # is better information than the agent can infer from the values. For a
+    # netlist the answer is fixed by the format itself: connectivity and
+    # part identity, nothing priced or measured.
     result = BOMReviewAgent().review(
-        components, constraints, available_fields=set(report.mapped)
+        components, constraints,
+        available_fields=NETLIST_FIELDS if is_netlist else set(report.mapped),
     )
+    if is_netlist:
+        # Checks a BOM cannot express, so they live with the netlist reader
+        # rather than in an agent that reviews shopping lists.
+        result.findings.extend(connectivity_findings(components, nets, report))
+
+    if args.diagram:
+        if not is_netlist:
+            print("helix-bom: --diagram needs a netlist. A BOM lists parts and "
+                  "quantities; how they connect is in the schematic. Export one "
+                  "from Eeschema with File > Export > Netlist.", file=sys.stderr)
+            return EXIT_UNREADABLE
+        try:
+            args.diagram.write_text(
+                generate_netlist_interconnect_svg(links, source=report.source),
+                encoding="utf-8")
+        except OSError as exc:
+            print(f"helix-bom: could not write {args.diagram}: {exc}", file=sys.stderr)
+            return EXIT_UNREADABLE
+        # stderr on purpose: --json output has to be the whole of stdout or
+        # it is not machine output. Same rule the demo banner is bound by.
+        print(f"Interconnect diagram written to {args.diagram}", file=sys.stderr)
 
     if args.command == "diagnose":
-        print(_render_diagnostic(report, result, components))
+        print(_render_diagnostic_netlist(report, result, links) if is_netlist
+              else _render_diagnostic(report, result, components))
         return EXIT_OK
     if args.json:
-        print(json.dumps(_as_dict(components, report, result), indent=2))
+        print(json.dumps(
+            _as_dict_netlist(components, nets, report, result, links) if is_netlist
+            else _as_dict(components, report, result), indent=2))
+    elif is_netlist:
+        print(_render_netlist(components, nets, report, result, links, constraints))
     else:
         print(_render(components, report, result, constraints, args.show_ignored_columns))
 

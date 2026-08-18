@@ -11,6 +11,8 @@ placement. Every diagram states this in its own rendered text, not just
 in code comments, so the caveat travels with the artifact itself.
 """
 
+import math
+
 # A small, fixed palette -- not client-configurable yet, kept simple and
 # legible rather than decorative.
 CATEGORY_COLORS = {
@@ -224,3 +226,142 @@ def generate_placement_blueprint_svg(components: list, constraints, review_resul
 
     svg.append("</svg>")
     return "\n".join(svg)
+
+
+# --- netlist-derived interconnect -------------------------------------
+#
+# The function above draws what categories of part *usually* talk to each
+# other. Measured against a real KiCad export it draws nothing at all, because
+# real exports carry no category column -- the guess had no input. The one
+# below draws what the schematic says, which is a different claim entirely and
+# the reason netlist input was added.
+
+NODE_FILL = "#4A90D9"
+EDGE_COLOR = "#5A6B7A"
+
+
+def _notice_svg(message: str, width: int = 620) -> str:
+    """A diagram that declines to be drawn, and says why.
+
+    Returned instead of an empty canvas: a blank image reads as "nothing is
+    connected", which is a claim about the board rather than about the file.
+    """
+    lines = _wrap(message, 78)
+    height = 28 + 18 * len(lines)
+    out = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
+           f'viewBox="0 0 {width} {height}">',
+           f'<rect width="{width}" height="{height}" fill="#FAFAFA"/>']
+    for index, line in enumerate(lines):
+        out.append(f'<text x="12" y="{24 + 18 * index}" font-family="sans-serif" '
+                   f'font-size="13" fill="#D9534F">{_xml(line)}</text>')
+    out.append("</svg>")
+    return "\n".join(out)
+
+
+def _wrap(text: str, width: int) -> list:
+    """Wrap on spaces. SVG has no text flow, so the wrapping is ours to do."""
+    words, lines, current = text.split(), [], ""
+    for word in words:
+        candidate = f"{current} {word}".strip()
+        if len(candidate) > width and current:
+            lines.append(current)
+            current = word
+        else:
+            current = candidate
+    if current:
+        lines.append(current)
+    return lines or [""]
+
+
+def generate_netlist_interconnect_svg(links: list, source: str = "",
+                                      max_labelled: int = 14) -> str:
+    """Draw the interconnect a netlist actually specifies.
+
+    ``links`` is what ``netlist.interconnect_from_nets`` returns:
+    ``(ref_a, ref_b, [net names])`` tuples, already ranked and already stripped
+    of power and ground.
+
+    Every line drawn is a net that exists between pins that are named, so this
+    diagram makes a claim that can be checked against the schematic. The older
+    category-based sketch could not; it said what usually connects to what.
+
+    Components are laid out on a circle. That is deliberately not a placement
+    suggestion -- it carries no claim about where anything sits on the board,
+    which is exactly right, because a netlist does not know. The layout is
+    chosen so no edge is hidden behind a node, and nothing more.
+    """
+    if not links:
+        return _notice_svg(
+            "No signal net joins two components in this file. Either every net "
+            "is power or ground, or each one reaches only a single component -- "
+            "there is nothing to draw between parts."
+        )
+
+    refs = sorted({ref for a, b, _ in links for ref in (a, b)})
+    count = len(refs)
+
+    box_h = 26
+    widths = {ref: max(46, 9 * len(ref) + 18) for ref in refs}
+    widest = max(widths.values())
+
+    # Arc length between neighbours has to clear the widest box, or adjacent
+    # labels collide. Solving 2*pi*r/n >= spacing for r is what sets the size:
+    # the canvas grows with the part count instead of the parts shrinking.
+    spacing = widest + 26
+    radius = max(120.0, spacing * count / (2 * math.pi))
+
+    margin = 34
+    header, footer = 58, 34
+    span = 2 * (radius + widest / 2 + margin)
+    svg_w = span
+    svg_h = header + span - 2 * margin + footer
+    cx, cy = svg_w / 2, header + (span - 2 * margin) / 2
+
+    positions = {}
+    for index, ref in enumerate(refs):
+        angle = -math.pi / 2 + 2 * math.pi * index / count
+        positions[ref] = (cx + radius * math.cos(angle),
+                          cy + radius * math.sin(angle))
+
+    out = [
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{svg_w:.0f}" '
+        f'height="{svg_h:.0f}" viewBox="0 0 {svg_w:.0f} {svg_h:.0f}">',
+        f'<rect width="{svg_w:.0f}" height="{svg_h:.0f}" fill="#FAFAFA"/>',
+        f'<text x="14" y="22" font-family="sans-serif" font-size="13" fill="#333">'
+        f'Interconnect from the netlist{" — " + _xml(source) if source else ""}</text>',
+        f'<text x="14" y="40" font-family="sans-serif" font-size="11" fill="#666">'
+        f'Every line is a net in the schematic, not a guess. Power and ground are '
+        f'excluded -- they reach nearly every part. Position carries no meaning.</text>',
+    ]
+
+    # Edges first, so a node is never drawn underneath a line.
+    label_edges = len(links) <= max_labelled
+    for ref_a, ref_b, names in links:
+        x1, y1 = positions[ref_a]
+        x2, y2 = positions[ref_b]
+        thickness = min(1.0 + len(names), 5.0)
+        out.append(f'<line x1="{x1:.1f}" y1="{y1:.1f}" x2="{x2:.1f}" y2="{y2:.1f}" '
+                   f'stroke="{EDGE_COLOR}" stroke-width="{thickness:.1f}" '
+                   f'stroke-opacity="0.55"/>')
+        if label_edges:
+            label = _xml(names[0] + (f"  +{len(names) - 1}" if len(names) > 1 else ""))
+            out.append(f'<text x="{(x1 + x2) / 2:.1f}" y="{(y1 + y2) / 2 - 4:.1f}" '
+                       f'font-family="sans-serif" font-size="9" fill="#33475B" '
+                       f'text-anchor="middle">{label}</text>')
+
+    for ref in refs:
+        x, y = positions[ref]
+        width = widths[ref]
+        out.append(f'<rect x="{x - width / 2:.1f}" y="{y - box_h / 2:.1f}" '
+                   f'width="{width:.0f}" height="{box_h}" rx="3" '
+                   f'fill="{NODE_FILL}" stroke="#2C6395" stroke-width="1"/>')
+        out.append(f'<text x="{x:.1f}" y="{y + 4:.1f}" font-family="sans-serif" '
+                   f'font-size="11" fill="white" text-anchor="middle">{_xml(ref)}</text>')
+
+    note = (f"{count} component(s), {len(links)} link(s) drawn."
+            + ("" if label_edges else
+               "  Net names omitted: too many links to label legibly."))
+    out.append(f'<text x="14" y="{svg_h - 12:.0f}" font-family="sans-serif" '
+               f'font-size="10" fill="#666">{_xml(note)}</text>')
+    out.append("</svg>")
+    return "\n".join(out)

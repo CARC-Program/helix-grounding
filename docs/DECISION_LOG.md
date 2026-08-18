@@ -1453,3 +1453,83 @@ stdlib.
 for a service with no users and no database — swapping it for a table is a
 small change on the day there is a table. What must not happen is inventing
 a database to hold three keys, which is the mistake D-044 just corrected.
+
+## D-046 — Netlist input, because the premium tiers were selling an empty file
+
+**Decision:** `helix-bom review` now accepts a KiCad `.net` netlist alongside a
+BOM CSV, dispatching on the file's contents rather than its extension. A
+netlist gets its own report, its own connectivity checks, and `--diagram`,
+which writes an interconnect SVG in which every line is a net that exists.
+
+**What was measured first.** Before building anything, the two paid tiers were
+run against a real BOM export to see what they actually delivered. Standard
+returned an error string and a 250-byte SVG with zero boxes drawn. Senior drew
+twelve rectangles, all of size (0.0, 0.0). Both depend on category and
+dimension columns, and no real BOM export carries either — so both had been
+charging for a blank image, and every test that covered them used hand-built
+components that supplied the missing fields.
+
+**Why no amount of parsing fixes it.** A BOM is a shopping list: which parts,
+how many. How they connect lives in the schematic; where they sit lives in the
+board file. A wiring diagram derived from a BOM is not hard, it is impossible,
+because the data is not in the file. The correct response to an impossible
+feature is to take a different input, not to write a better guess.
+
+**What the netlist actually buys.** On the test fixture: U1 to U2 over I2C_SDA
+and I2C_SCL, with R1 and R2 correctly shown as the pull-ups on both lines. The
+BOM-only version of that same board says "no compute category found, cannot
+anchor a diagram". Beyond the diagram, connectivity has failure modes a BOM
+cannot express at all, and the useful one is a *named* net with a single
+connection — a label somebody typed that joined nothing. On a schematic
+printout it is drawn exactly as it would be had it connected, so it survives
+human review, and a parser finds it in one pass. Labels KiCad generated itself
+(`unconnected-(U1-Pad7)`, `Net-(R3-Pad1)`, `N$12`) are deliberately not
+flagged: those are ordinary, often intentional, and already reported by KiCad,
+and burying the real finding under them would cost more than it is worth.
+
+**The honesty rule held at the seam.** A netlist carries no prices, no
+dimensions, no power figures and no categories, so all five BOM checks report
+themselves unrun rather than passing quietly — the agent is handed the exact
+set of fields the format supplies instead of inferring from values. Two of the
+five skipped-check reasons had to change: they told the reader to "add a price
+column", which is advice a netlist user cannot act on, since the format has no
+columns at all. A report that is accurate about what happened and wrong about
+what to do next still sends the reader somewhere useless.
+
+**A gap this closed that was not the plan.** The netlist parser had been
+written, tested at 18 tests, committed — and imported by nothing outside its
+own test file. `cli.py` still loaded only CSVs, so no user could reach a line
+of it. Separately, `scripts/export_diagrams.py` had been crashing on import
+since the rebuild four days earlier, because it imported `bom_review_agent`
+from an `AI_CODE/` folder that rebuild deleted. Both have the same cause:
+nothing in the suite asserted that the code was reachable, only that it was
+correct. `tests/test_scripts.py` now imports every script in `scripts/`, which
+is the cheapest test that would have caught either.
+
+**Verification, not assertion:** the diagram's geometry is checked
+numerically — every box and every line endpoint against the canvas bounds, at
+5 nodes, at 59 nodes, and with an over-long reference designator — because
+D-043 established that well-formed XML is not evidence a diagram shows
+anything. The leak test for the netlist diagnostic was itself verified by
+introducing a deliberate leak and confirming it failed. 255 tests pass, up
+from 223.
+
+**On the diagnostic, which is stricter here than for a CSV.** The CSV
+diagnostic prints column *headings*, because the parser matches on them and a
+heading is rarely secret. A netlist has no headings; its equivalents are net
+names and part values, and those are the design itself. `I2C_SDA` is harmless
+and `MOTOR_KILL_INTERLOCK` is not, and no rule can tell them apart — so counts
+and shapes go in and names stay out, reference designators aside, which say
+nothing beyond "there is a fourth resistor".
+
+**Cost impact:** none. No new dependency — the s-expression parser is forty
+hand-written lines, and taking a dependency for it would undercut the
+library's central claim.
+
+**Future implications:** this is half of the combined direction. The other
+half is distributor enrichment, and the netlist makes the case for it concrete
+rather than theoretical: a netlist review currently runs zero of five checks,
+and prices are what turn the first of them on. It also means the tiers need
+rethinking before anything is sold — the features they were gated on were
+measured to be empty, and what replaced them is not tier-shaped.
+

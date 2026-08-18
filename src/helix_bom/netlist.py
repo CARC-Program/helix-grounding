@@ -242,3 +242,77 @@ def interconnect_from_nets(nets: list, max_edges: int = 60) -> list:
 
     ranked = sorted(links.items(), key=lambda kv: (-len(kv[1]), kv[0]))
     return [(a, b, names) for (a, b), names in ranked[:max_edges]]
+
+
+# KiCad invents a name for every net the designer did not label. The exact
+# spelling has changed across versions, so all three are matched rather than
+# whichever one this machine's KiCad happens to emit.
+_AUTO_NAMED = re.compile(r"^(net-\(|unconnected-\(|n\$\d+$)", re.IGNORECASE)
+
+# References that are legitimately connected to nothing. A mounting hole with
+# no net is a mounting hole; flagging it teaches the reader to skim the
+# section, which costs more than the finding is worth.
+_UNCONNECTED_BY_DESIGN = re.compile(r"^(H|MH|FID|TP|LOGO|MK)\d+$", re.IGNORECASE)
+
+
+def connectivity_findings(components: list, nets: list, report: NetlistReport) -> list:
+    """Defects a netlist can prove and a BOM cannot even see.
+
+    None of the five BOM checks can run on a netlist — it carries no prices,
+    no dimensions, no power figures and no categories, and the agent says so
+    rather than passing them silently. What it does carry is connectivity, and
+    connectivity has its own failure modes.
+
+    Returns ``ReviewFinding`` objects, the same type the BOM checks produce, so
+    the caller merges them into one list rather than presenting two kinds of
+    result.
+    """
+    from .agent import ReviewFinding
+
+    findings = []
+
+    # --- a label that landed nowhere ---------------------------------
+    # A single-node net means one pin carries a net all to itself. When KiCad
+    # named that net, it is simply an unconnected pin, which KiCad already
+    # reports and which is often intentional. When a *person* named it, they
+    # typed a label expecting it to join something — and it did not. That is
+    # the interesting case, and it is invisible on a schematic printout
+    # because the label is drawn exactly as it would be if it had connected.
+    dangling = [net for net in nets
+                if len(net.nodes) == 1 and not _AUTO_NAMED.match(net.name.strip())]
+    for net in sorted(dangling, key=lambda n: n.name):
+        node = net.nodes[0]
+        where = f"{node.ref} pin {node.pin}" + (f" ({node.function})" if node.function else "")
+        findings.append(ReviewFinding(
+            "warning",
+            f"Net '{net.name}' reaches only {where}. A named net with one "
+            f"connection is a label that was typed but never joined anything."
+        ))
+
+    # --- a part wired to nothing at all ------------------------------
+    orphans = [ref for ref in report.unconnected
+               if not _UNCONNECTED_BY_DESIGN.match(ref)]
+    by_design = [ref for ref in report.unconnected if ref not in orphans]
+    if orphans:
+        findings.append(ReviewFinding(
+            "warning",
+            f"{len(orphans)} component(s) appear in the schematic on no net at "
+            f"all: {', '.join(orphans)}. Either they are placed and unwired, or "
+            f"their pins are unconnected by intent."
+        ))
+    if by_design:
+        findings.append(ReviewFinding(
+            "info",
+            f"{len(by_design)} component(s) unconnected, which their reference "
+            f"designators suggest is deliberate — mounting holes, fiducials or "
+            f"test points: {', '.join(by_design)}."
+        ))
+
+    # --- what was read, stated rather than assumed -------------------
+    findings.append(ReviewFinding(
+        "info",
+        f"{report.signal_nets} signal net(s) and {report.power_nets} power/ground "
+        f"net(s) read from {report.source}. Power nets are excluded from the "
+        f"interconnect diagram because they touch nearly every part."
+    ))
+    return findings

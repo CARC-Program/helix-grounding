@@ -171,8 +171,10 @@ class BOMReviewAgent:
         if not has_cost:
             result.skipped_checks.append(SkippedCheck(
                 "budget",
-                "no unit prices in the submitted data — add a price or cost "
-                "column to check the BOM against a budget",
+                "no unit prices in the submitted data — a budget cannot be "
+                "checked without them. A BOM export can carry a price column; "
+                "a netlist never does, so prices have to come from a "
+                "distributor or a priced BOM",
             ))
         if not has_power:
             result.skipped_checks.append(SkippedCheck(
@@ -191,7 +193,8 @@ class BOMReviewAgent:
         if not has_categories:
             result.skipped_checks.append(SkippedCheck(
                 "missing-category sanity check",
-                "no category column in the submitted data",
+                "no component categories in the submitted data — a BOM "
+                "export can carry a category column, a netlist cannot",
             ))
         if not has_lead_times:
             result.skipped_checks.append(SkippedCheck(

@@ -61,6 +61,11 @@ through it and gets a report back.*
       wiring diagram — the data is not in it, which was measured, not
       assumed — so `helix-bom review board.net` reads a KiCad netlist and
       `--diagram` draws links that exist rather than links that are typical
+- [x] Make that playbook executable rather than written. `helix_ops`
+      renders each post from live repository facts, refuses any figure the
+      repo cannot produce, withholds the next channel while a bug report is
+      open, and counts only people who actually ran the tool. `python -m
+      helix_ops.cli status` answers "how far am I" from recorded events
 - [ ] Get it in front of hardware makers who have never spoken to the
       author. Everything above is preparation; this is the milestone.
       Playbook in `docs/FIRST_USERS.md` — the ask is a bug report, not a
@@ -75,6 +80,10 @@ through it and gets a report back.*
 - [ ] account owner on the Stripe account. An adult account owner is required, but a
       adult account owner must be the account owner before it accepts charges or
       transfers funds. Arrange this deliberately, not at first sale
+- [ ] Work through `docs/LEGAL_CHECKLIST.md`. Most of what looks like a
+      legal blocker is an account somebody else has to open; sorting those
+      from the items that genuinely need a professional is what stops the
+      project waiting on a lawyer it does not yet need
 - [ ] Price in the $99–$299/month band. The arithmetic is in the research:
       ~51 customers at $99 reaches teacher-salary income; ~264 at $19 does not
 - [ ] No contracts, no invoicing, no negotiated terms — card on file only

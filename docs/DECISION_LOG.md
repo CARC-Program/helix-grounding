@@ -1533,3 +1533,98 @@ and prices are what turn the first of them on. It also means the tiers need
 rethinking before anything is sold — the features they were gated on were
 measured to be empty, and what replaced them is not tier-shaped.
 
+## D-047 — Names fixed by rule; outreach made executable and human-posted
+
+**Decision:** four names settled and a naming rule adopted (`docs/IDENTITY.md`);
+`src/helix_ops/` built to run the launch — gather facts, render posts, verify
+them, track what came back, and say what to do next; `docs/LEGAL_CHECKLIST.md`
+written to sort the legal work by who can actually act on it.
+
+**The names.** *Helix* is the operator — the AI layer that runs operations, and
+never a product. *Helix Labs* is the entity. Every product is `helix-<domain>`,
+where the domain is the noun the buyer already uses: `helix-grounding`,
+`helix-bom`, and `helix-invoice` reserved but unbuilt. The rule is the
+deliverable rather than the names: `ARCHITECTURE.md` already makes a new
+vertical a new file in `domains/`, and this makes the name fall out of that same
+choice, so a vertical costs zero naming decisions. A descriptive name is also
+found by people searching for the job, which matters when the binding
+constraint is distribution and there is no marketing budget to teach an
+audience what an invented word means.
+
+**What was deliberately not renamed.** `helix-grounding` is load-bearing — it
+appears in `pyproject.toml`, the CI workflow, four URLs, every install command
+in every draft, and the README. After the first upload the cost of changing it
+is permanent, so it changes now or never, and there is no reason to change it.
+
+**Outreach: the agent drafts, a person posts.** This was put to the owner
+explicitly rather than assumed, because it is the one place where the obvious
+reading of "minimal assistance on my end" and the project's own research point
+in opposite directions. `BUSINESS_MODEL.md` concludes that distribution is the
+bottleneck and automation cannot fix it; `FIRST_USERS.md` says post in public
+where people opted in, and no DMs. A bot posting links to Reddit and Hacker
+News gets an account banned, and a new account's ban is effectively permanent
+and takes the project's name with it. Show HN is one shot. So `helix_ops` does
+everything around the post — facts, drafts, verification, tracking, the next
+action — and sends nothing anywhere.
+
+**The part worth keeping: the drafts are checked by the product.** Every launch
+post claims a version, an install command and a count, and those decay. A post
+written on Tuesday and published on Friday can already be wrong, in the first
+thing a stranger ever reads about this project. So no draft contains a
+hand-typed number: facts are read from the files that define them, and the
+finished text is then run through `helix_grounding` and refused if any figure
+is not one the repository can produce. The BOM reviewer holds a customer's
+generated documents to that standard; there was no principled reason the
+company's own outreach should be held to a looser one.
+
+**A real gap found while building it, and fixed rather than papered over.** The
+first version of that check reported "grounded: 0 claims verified" on every
+draft — it was verifying nothing, because the library's `QuantityExtractor`
+deliberately ignores bare integers. That restraint is correct for BOM prose,
+where a bare integer is more often a list position than a count. A launch post
+inverts it: "0 runtime dependencies" and "255 tests" *are* the claim. The fix
+was a domain-local `CountExtractor` passed through `Verifier(extractors=...)`,
+the extension point the library already provides — not a loosening of the
+shared default, which would have pushed noise onto every other caller. A check
+that silently verifies nothing is worse than no check, because it reads as
+safety.
+
+**The strategy is enforced, not described.** Three rules from `FIRST_USERS.md`
+are now executable: one channel at a time (the next channel is withheld while a
+bug report is unresolved), Show HN stays locked until prerequisites are
+recorded met, and prerequisites are *recorded* rather than inferred — whether
+the package is on PyPI is a fact about the world, and this module runs offline
+by design. Only a person who actually ran the tool counts toward M2; upvotes
+and encouraging comments are proxies for the one event the roadmap closes on.
+
+**Verification, not assertion:** the load-bearing test corrupts exactly one
+figure in a rendered post and asserts the check rejects it, plus a second test
+asserting the check extracts a non-trivial number of claims at all — because
+the failure mode found during the build was a check that passed while measuring
+nothing. A bug in `measure_tests` was found by its own test and fixed: when
+every test fails there is no "N passed" line, so the parse error fired before
+the exit-code check and reported "could not read the output", sending the
+reader to debug pytest instead of their failing tests. An accurate refusal with
+a misleading reason is its own bug. 291 tests pass, up from 255.
+
+**On shares and stock, which was asked about directly.** Sorted into
+`LEGAL_CHECKLIST.md` rather than answered here, and the honest answer is that
+it is not a question yet: an LLC has membership interests rather than shares,
+and equity becomes real only when a second person is involved — at which point
+it is securities law and needs a professional, with no template version. What
+costs nothing today is a dated contribution record, so that a future cap table
+reflects what happened rather than what anyone remembers. Git history already
+covers the code; the ledger covers the rest.
+
+**Cost impact:** none in dependencies — `helix_ops` is stdlib plus this
+project's own library. It is kept out of the wheel for the same reason
+`helix_api` is, and a stronger one: nobody installing a verification library
+should receive a launch tracker.
+
+**Future implications:** the next real event is a person who is not the author
+running the tool. Everything in this entry is preparation for that, and
+preparation is exactly what this project has historically over-invested in — so
+the honest reading of `helix_ops status` is that it currently reports three
+unmet prerequisites and zero strangers, and it will keep reporting that until
+somebody opens an account.
+

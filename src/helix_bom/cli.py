@@ -22,6 +22,12 @@ from .diagrams import generate_netlist_interconnect_svg
 from .ingest import load_bom
 from .netlist import connectivity_findings, interconnect_from_nets, load_netlist
 
+# The public list of subcommands. Declared here rather than read back out of
+# argparse internals, because helix_ops quotes it in launch posts and a
+# private attribute is not something a published claim should rest on. A test
+# fails if this and the parser ever disagree.
+COMMANDS = ("demo", "diagnose", "review")
+
 SEVERITY_ORDER = {"critical": 0, "warning": 1, "info": 2}
 SAMPLE_BOM = Path(__file__).parent / "examples" / "sample_bom.csv"
 EXIT_OK, EXIT_FINDINGS, EXIT_UNREADABLE = 0, 1, 2
@@ -433,7 +439,14 @@ def _render_diagnostic_netlist(report, result, links) -> str:
     return "\n".join(lines)
 
 
-def main(argv: list[str] | None = None) -> int:
+def build_parser() -> argparse.ArgumentParser:
+    """The argument surface, separated from running it.
+
+    Split out so a test can compare the parser's real subcommands against
+    the public COMMANDS list. helix_ops quotes that list in launch posts,
+    and a published claim should not rest on the two staying in step by
+    memory.
+    """
     parser = argparse.ArgumentParser(
         prog="helix-bom",
         description="Review a bill of materials for budget, power, fit and "
@@ -491,7 +504,11 @@ def main(argv: list[str] | None = None) -> int:
     review.add_argument("--strict", action="store_true",
                         help="exit non-zero if any check could not run")
 
-    args = parser.parse_args(argv)
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
 
     if args.command == "diagnose":
         args.budget, args.power, args.enclosure = 0.0, 0.0, None

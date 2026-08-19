@@ -1,0 +1,37 @@
+{
+  "prerequisites": {
+    "repo_public": false,
+    "pypi_published": false,
+    "demo_works": false
+  },
+  "posts": {
+    "reddit_pcb": {
+      "channel": "reddit_pcb",
+      "state": "planned",
+      "posted_at": "",
+      "url": "",
+      "responses": []
+    },
+    "show_hn": {
+      "channel": "show_hn",
+      "state": "planned",
+      "posted_at": "",
+      "url": "",
+      "responses": []
+    },
+    "kicad": {
+      "channel": "kicad",
+      "state": "planned",
+      "posted_at": "",
+      "url": "",
+      "responses": []
+    },
+    "eevblog": {
+      "channel": "eevblog",
+      "state": "planned",
+      "posted_at": "",
+      "url": "",
+      "responses": []
+    }
+  }
+}

@@ -49,7 +49,10 @@ from .extractors import (
 from .truth import DEFAULT_TOLERANCES, TOKEN_KINDS, GroundTruth
 from .verifier import DEFAULT_FALLBACK, ValidatedGeneration, Verifier
 
-__version__ = "0.1.0"
+# Kept in step with pyproject.toml by test_ops_facts.py. These drifted apart
+# once already: the package shipped as 0.1.1 while this said 0.1.0, so anyone
+# reading it programmatically got the wrong answer.
+__version__ = "0.1.1"
 
 __all__ = [
     "Claim",

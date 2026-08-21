@@ -15,8 +15,8 @@ license-files = ["LICENSE"]
 # mirrors within hours; an address here gets scraped for spam permanently.
 #
 # It is not a claim about who wrote this. Copyright sits with the author and
-# is recorded in LICENSE, where it belongs -- see PUBLISHING.md for which
-# name goes in which field and why they are not the same question.
+# is recorded in LICENSE, where it belongs. Which name goes in which field
+# is a separate question from who wrote the code, and they are not the same.
 authors = [{ name = "Helix Labs" }]
 keywords = [
     "llm", "hallucination", "grounding", "validation", "evals",

@@ -222,7 +222,7 @@ pip install -e ".[dev]"
 pytest
 ```
 
-190 tests, nothing skipped, no database and no services required.
+292 tests, nothing skipped, no database and no services required.
 
 ```
 src/helix_grounding/   the library
@@ -231,11 +231,10 @@ src/helix_bom/         the worked example: ingest, checks, CLI
 src/helix_llm/         optional model client (local Ollama, or Anthropic)
 CHANGELOG.md           what changed, and whether you need to re-run anything
 docs/                  decision log, architecture, business model, case study
-                       PUBLISHING.md — GitHub + PyPI release checklist
-                       FIRST_USERS.md — how to get the first users
+                       FIRST_USERS.md — how the first users get found
 ```
 
-`docs/DECISION_LOG.md` is 45 decisions with the reasoning attached, including
+`docs/DECISION_LOG.md` is 47 decisions with the reasoning attached, including
 the bugs that produced the design above. It is the most useful file here for
 understanding *why* rather than *what*.
 

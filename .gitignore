@@ -32,3 +32,8 @@ diagram_output/
 Thumbs.db
 desktop.ini
 .DS_Store
+
+# Internal operating documents. Not secret, but not the public's business either:
+# release checklists, market research, and the legal/ownership record, which
+# names real people. Nothing here helps somebody use the library.
+private/

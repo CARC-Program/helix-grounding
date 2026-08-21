@@ -96,9 +96,9 @@ Two practical consequences:
    the entity name later is the ordinary sequence and does not foreclose
    anything.
 
-**Re-check availability at upload time.** `docs/PUBLISHING.md` records that
-`helix-grounding` was confirmed available — that was a check on a date, not a
-reservation. PyPI names are claimed continuously.
+**Re-check availability at upload time.** `helix-grounding` was confirmed
+available once — that was a check on a date, not a reservation. PyPI names are
+claimed continuously.
 
 ---
 
@@ -118,5 +118,6 @@ to trademark and easier to be crowded out of. That is a cost accepted
 deliberately, and it is reversible in the direction that matters — a product
 can acquire a distinctive brand later, on top of a package name that stays put.
 
-Related: [`BUSINESS_MODEL.md`](BUSINESS_MODEL.md), [`PUBLISHING.md`](PUBLISHING.md),
-[`LEGAL_CHECKLIST.md`](LEGAL_CHECKLIST.md), decision `D-047`.
+Related: [`BUSINESS_MODEL.md`](BUSINESS_MODEL.md), decision `D-047`. The
+release checklist and the ownership record are internal and are not published
+with this repository.

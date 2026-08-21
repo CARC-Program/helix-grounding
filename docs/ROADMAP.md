@@ -16,7 +16,7 @@ having been written about.
 
 ## Now
 
-Direction set by `MARKET_RESEARCH.html`: a deterministic grounding layer,
+Direction set by the market research pass: a deterministic grounding layer,
 proven in hardware BOM review. Two constraints bind everything — no
 outreach-dependent acquisition, and no negotiated contracts before 18. Both
 select the same shape: self-serve, credit-card, no signature required.
@@ -35,11 +35,11 @@ output.*
       parsed, stripped of docstrings, and checked for domain coupling by test
 - [x] Package for PyPI — `helix-grounding` confirmed available, wheel builds,
       twine passes, and a clean-venv install proves the zero-dependency claim
-- [x] Copyright and authorship set (Helix Labs — the author holds
-      copyright; the account owner owns the account, which is a different field)
-- [ ] **Actually publish it.** Needs a PyPI account, a GitHub username to
-      replace the placeholder URLs, and a decision on whether a real full
-      name should be permanently public. See `docs/PUBLISHING.md`
+- [x] Copyright and authorship set — the author holds copyright, and the
+      account owner is a separate field that does not imply authorship
+- [ ] **Actually publish it.** Needs a PyPI account and a final pass over
+      what the package metadata makes public, which is permanent once
+      mirrors copy it
 - [ ] A third domain, ideally chosen by whoever adopts it first rather than
       guessed at here
 
@@ -77,13 +77,13 @@ through it and gets a report back.*
 ### M3 — First payment
 *Closes when: money arrives from someone unrelated to the author.*
 
-- [ ] account owner on the Stripe account. An adult account owner is required, but a
-      adult account owner must be the account owner before it accepts charges or
-      transfers funds. Arrange this deliberately, not at first sale
-- [ ] Work through `docs/LEGAL_CHECKLIST.md`. Most of what looks like a
-      legal blocker is an account somebody else has to open; sorting those
-      from the items that genuinely need a professional is what stops the
-      project waiting on a lawyer it does not yet need
+- [ ] Stripe account set up and able to accept charges. Arrange this
+      deliberately and well before it is needed, not in the twenty minutes
+      after somebody first tries to pay
+- [ ] Work through the legal and ownership checklist. Most of what looks
+      like a legal blocker is an account somebody has to open; sorting
+      those from the items that genuinely need a professional is what
+      stops the project waiting on a lawyer it does not yet need
 - [ ] Price in the $99–$299/month band. The arithmetic is in the research:
       ~51 customers at $99 reaches teacher-salary income; ~264 at $19 does not
 - [ ] No contracts, no invoicing, no negotiated terms — card on file only
@@ -114,8 +114,8 @@ Recorded so they are not quietly reconsidered.
   manufacturing). A portable AI terminal is a good object with no causal path
   to revenue. Cut 2026-08-14 by the owner's own decision.
 - **Consulting on retainer.** The prior business model. Fails the
-  no-outreach constraint outright, and requires signing agreements a non-signing party
-  cannot enforceably sign.
+  no-outreach constraint outright, and requires negotiated agreements this
+  business is deliberately structured never to need.
 - **Anything consumer-priced.** 264 customers at $19/month is not reachable
   without an audience; 51 at $99 is.
 - **Competing with Braintrust head-on.** They have $120M and an $800M

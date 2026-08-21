@@ -1537,8 +1537,8 @@ measured to be empty, and what replaced them is not tier-shaped.
 
 **Decision:** four names settled and a naming rule adopted (`docs/IDENTITY.md`);
 `src/helix_ops/` built to run the launch — gather facts, render posts, verify
-them, track what came back, and say what to do next; `docs/LEGAL_CHECKLIST.md`
-written to sort the legal work by who can actually act on it.
+them, track what came back, and say what to do next; an internal legal and
+ownership checklist written to sort that work by who can actually act on it.
 
 **The names.** *Helix* is the operator — the AI layer that runs operations, and
 never a product. *Helix Labs* is the entity. Every product is `helix-<domain>`,
@@ -1607,8 +1607,8 @@ the exit-code check and reported "could not read the output", sending the
 reader to debug pytest instead of their failing tests. An accurate refusal with
 a misleading reason is its own bug. 291 tests pass, up from 255.
 
-**On shares and stock, which was asked about directly.** Sorted into
-`LEGAL_CHECKLIST.md` rather than answered here, and the honest answer is that
+**On shares and stock, which was asked about directly.** Sorted into the
+internal ownership checklist rather than answered here, and the honest answer is that
 it is not a question yet: an LLC has membership interests rather than shares,
 and equity becomes real only when a second person is involved — at which point
 it is securities law and needs a professional, with no template version. What

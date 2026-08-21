@@ -172,20 +172,6 @@ words will land better than a polished version in mine.
   turns the conversation into a negotiation you are not ready for and cannot
   legally close.
 
-### On mentioning your age
-
-Entirely your call, and there is no wrong answer.
-
-It generates real goodwill — people root for a someone who shipped something
-that works. It also means some readers judge the code by the age rather than
-on merit, and it attaches your age to a public post permanently.
-
-The work stands on its own either way. If you would rather it be judged
-without that context, say nothing; it is not dishonest to simply not
-volunteer it.
-
----
-
 ## Handling what comes back
 
 **Someone reports a bug.** Best possible outcome. Ask for `helix-bom

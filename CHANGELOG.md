@@ -1,6 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.1.2 — 2026-08-22
+
+> **If you review boards as well as buy parts, this is the release that
+> matters.** `helix-bom` now reads a KiCad netlist, so the wiring stops being
+> guesswork. And if your terminal is not UTF-8, the previous release crashed on
+> the first command in the README — that is fixed.
+
 
 ### Added
 

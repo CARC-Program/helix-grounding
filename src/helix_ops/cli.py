@@ -20,6 +20,7 @@ from pathlib import Path
 
 from helix_bom.cli import err, out
 
+from . import release as release_checks
 from . import verify as verifier
 from .campaign import PREREQUISITES, RESPONSE_KINDS, Campaign
 from .drafts import BY_KEY, CHANNELS, DraftError, render, verify
@@ -155,6 +156,29 @@ def _mark_ready(args):
     return EXIT_OK
 
 
+def _release_check(args):
+    """Refuse a release that would ship a claim this repo cannot back.
+
+    Stricter than anything else here: a check that could not run counts as a
+    failure. Everywhere else an unrunnable check is reported honestly and the
+    caller decides -- but PyPI will not let you re-upload a version, mirrors
+    copy within hours, and the first thing a stranger installs is the thing
+    they judge this by. There is nothing to decide.
+    """
+    out("Running the suite to get a real number...")
+    checks = release_checks.run_all()
+    out("")
+    for check in checks:
+        out(check.line())
+    failed = [c for c in checks if not c.ok]
+    out("")
+    if failed:
+        out(f"{len(failed)} of {len(checks)} checks failed. Not releasable.")
+        return EXIT_REFUSED
+    out(f"All {len(checks)} checks pass. Safe to build and upload.")
+    return EXIT_OK
+
+
 def _posted(args):
     campaign = Campaign.load(args.store)
     campaign.mark_posted(args.channel, args.url, args.on)
@@ -238,6 +262,10 @@ def build_parser() -> argparse.ArgumentParser:
                             "disagrees (use when the check is wrong, "
                             "not when the world is)")
     ready.set_defaults(func=_mark_ready)
+
+    release = sub.add_parser(
+        "release-check", help="pre-flight checks before building and uploading")
+    release.set_defaults(func=_release_check)
 
     posted = sub.add_parser("posted", help="record that a post went up")
     posted.add_argument("channel", choices=channels)

@@ -43,8 +43,18 @@ PERSONAL_PATTERNS = re.compile(
     re.IGNORECASE,
 )
 
-# Files whose whole job is to describe this problem, so they name the words.
-DETECTOR_EXEMPT = {"src/helix_ops/release.py"}
+# Files that necessarily contain the words, because their job is to describe or
+# to test for them. `release.py` holds the pattern; `test_release.py` plants a
+# name to prove the detector catches one.
+#
+# This set is the weak point of the whole check and is meant to stay at two
+# entries. Every name added here is a file the gate stops looking at, and the
+# last detector failed for exactly that reason -- it excluded a folder, and the
+# thing it was built to find was sitting in it.
+DETECTOR_EXEMPT = {
+    "src/helix_ops/release.py",
+    "tests/test_release.py",
+}
 
 
 @dataclass

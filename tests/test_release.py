@@ -175,7 +175,15 @@ def test_this_repository_currently_passes_the_detector():
     assert check_no_personal_details(REPO_ROOT).ok
 
 
-def test_release_module_is_exempt_from_its_own_detector():
-    """It names the words it searches for. Without the exemption the gate can
-    never pass, which is the kind of thing that gets a check deleted."""
-    assert "src/helix_ops/release.py" in release.DETECTOR_EXEMPT
+def test_the_exemption_list_stays_tiny():
+    """The exemption list is the weak point of the whole check: every entry is
+    a file the gate stops looking at. The previous detector failed for exactly
+    that reason, excluding a folder that held the thing it was built to find.
+
+    Two files legitimately name the words -- the one holding the pattern and
+    the one planting a name to prove it works. A third should have to justify
+    itself by breaking this test."""
+    assert release.DETECTOR_EXEMPT == {
+        "src/helix_ops/release.py",
+        "tests/test_release.py",
+    }

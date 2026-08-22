@@ -43,6 +43,19 @@ columns at all.
 
 ### Fixed
 
+**`helix-bom demo` crashed on a Windows console that is not UTF-8.** On cp437
+and cp850 — both ordinary console defaults — the first command in the README
+raised `UnicodeEncodeError` and printed a traceback instead of a report,
+because the output contains em dashes. Anyone whose terminal was configured
+that way met a stack trace before they saw a single finding.
+
+Output is now checked against the stream's own encoding and transliterated
+when it will not fit: an em dash becomes `--`, which still reads, rather than
+`?`, which does not. A UTF-8 console is left exactly as it was. Tests run the
+CLI as a subprocess under each legacy encoding, because in-process capture
+replaces the stream and hides the problem entirely — which is why the existing
+suite passed while the bug was live.
+
 `scripts/export_diagrams.py` ran again. It had been importing modules from a
 folder the 2026-08-14 rebuild deleted, so it crashed on import. Every script
 in `scripts/` is now imported by the test suite, which is what would have

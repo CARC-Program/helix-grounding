@@ -32,6 +32,67 @@ SEVERITY_ORDER = {"critical": 0, "warning": 1, "info": 2}
 SAMPLE_BOM = Path(__file__).parent / "examples" / "sample_bom.csv"
 EXIT_OK, EXIT_FINDINGS, EXIT_UNREADABLE = 0, 1, 2
 
+# Characters this project writes in prose that an older Windows console cannot
+# encode. cp437 and cp850 are still ordinary console defaults, and on both of
+# them `helix-bom demo` -- the first command in the README, the one a stranger
+# runs before anything else -- died with UnicodeEncodeError before printing a
+# single finding. Found by running the published package on a non-UTF-8
+# console rather than by reading the code, which would never have shown it.
+ASCII_FALLBACKS = {
+    "\u2014": "--",     # em dash
+    "\u2013": "-",      # en dash
+    "\u00b0": " deg",   # degree sign
+    "\u20ac": "EUR",    # euro sign
+    "\u00a3": "GBP",    # pound sign
+    "\u2018": "'", "\u2019": "'",
+    "\u201c": '"', "\u201d": '"',
+}
+
+
+def _console_safe(text: str, stream) -> str:
+    """Return ``text`` in a form ``stream`` can actually encode.
+
+    Transliterates rather than dropping, because "--" carries the meaning of an
+    em dash and "?" does not. Anything still unencodable after that becomes a
+    replacement character: a mangled character is a cosmetic problem, and a
+    traceback where the report should be is not.
+
+    On a UTF-8 console this does nothing at all -- the fast path is a single
+    successful encode.
+    """
+    encoding = getattr(stream, "encoding", None) or "utf-8"
+    try:
+        text.encode(encoding)
+        return text
+    except UnicodeEncodeError:
+        pass
+    except LookupError:
+        # The stream names a codec Python does not have. Transliterating is
+        # still worth doing; round-tripping through the missing codec is not,
+        # and trying it a second time was how the first version of this
+        # function raised the very error it exists to prevent.
+        return _transliterate(text)
+
+    text = _transliterate(text)
+    try:
+        return text.encode(encoding, errors="replace").decode(encoding, errors="replace")
+    except LookupError:  # pragma: no cover - unreachable, kept as a backstop
+        return text
+
+
+def _transliterate(text: str) -> str:
+    for char, plain in ASCII_FALLBACKS.items():
+        text = text.replace(char, plain)
+    return text
+
+
+def out(text: str = "") -> None:
+    print(_console_safe(str(text), sys.stdout))
+
+
+def err(text: str = "") -> None:
+    print(_console_safe(str(text), sys.stderr), file=sys.stderr)
+
 # The Component fields a KiCad netlist actually supplies. Everything else --
 # price, dimensions, power draw, category, lead time -- is absent from the
 # format, not zero in this particular file. Handing the agent this set is what
@@ -527,8 +588,8 @@ def main(argv: list[str] | None = None) -> int:
             # above the document and make it unparseable -- a caught bug, and
             # the general rule it came from: machine output is the whole of
             # stdout or it is not machine output.
-            print(f"Reviewing the bundled example: {SAMPLE_BOM.name}")
-            print("Run `helix-bom review <your file>.csv` against your own BOM.\n")
+            out(f"Reviewing the bundled example: {SAMPLE_BOM.name}")
+            out("Run `helix-bom review <your file>.csv` against your own BOM.\n")
 
     # Which kind of file this is decides everything downstream. It is read
     # from the contents rather than trusted from the extension, because both
@@ -545,16 +606,16 @@ def main(argv: list[str] | None = None) -> int:
         else:
             components, report = load_bom(args.file)
     except FileNotFoundError:
-        print(f"helix-bom: no such file: {args.file}", file=sys.stderr)
+        err(f"helix-bom: no such file: {args.file}")
         return EXIT_UNREADABLE
     except ValueError as exc:
-        print(f"helix-bom: {exc}", file=sys.stderr)
+        err(f"helix-bom: {exc}")
         return EXIT_UNREADABLE
 
     if not components:
         detail = ("parsed, but lists no parts -- no (components ...) block"
                   if is_netlist else "has a header but no data rows")
-        print(f"helix-bom: {report.source} {detail}.", file=sys.stderr)
+        err(f"helix-bom: {report.source} {detail}.")
         return EXIT_UNREADABLE
 
     width, depth, height = args.enclosure or (0.0, 0.0, 0.0)
@@ -580,33 +641,33 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.diagram:
         if not is_netlist:
-            print("helix-bom: --diagram needs a netlist. A BOM lists parts and "
-                  "quantities; how they connect is in the schematic. Export one "
-                  "from Eeschema with File > Export > Netlist.", file=sys.stderr)
+            err("helix-bom: --diagram needs a netlist. A BOM lists parts and "
+                "quantities; how they connect is in the schematic. Export one "
+                "from Eeschema with File > Export > Netlist.")
             return EXIT_UNREADABLE
         try:
             args.diagram.write_text(
                 generate_netlist_interconnect_svg(links, source=report.source),
                 encoding="utf-8")
         except OSError as exc:
-            print(f"helix-bom: could not write {args.diagram}: {exc}", file=sys.stderr)
+            err(f"helix-bom: could not write {args.diagram}: {exc}")
             return EXIT_UNREADABLE
         # stderr on purpose: --json output has to be the whole of stdout or
         # it is not machine output. Same rule the demo banner is bound by.
-        print(f"Interconnect diagram written to {args.diagram}", file=sys.stderr)
+        err(f"Interconnect diagram written to {args.diagram}")
 
     if args.command == "diagnose":
-        print(_render_diagnostic_netlist(report, result, links) if is_netlist
-              else _render_diagnostic(report, result, components))
+        out(_render_diagnostic_netlist(report, result, links) if is_netlist
+            else _render_diagnostic(report, result, components))
         return EXIT_OK
     if args.json:
-        print(json.dumps(
+        out(json.dumps(
             _as_dict_netlist(components, nets, report, result, links) if is_netlist
             else _as_dict(components, report, result), indent=2))
     elif is_netlist:
-        print(_render_netlist(components, nets, report, result, links, constraints))
+        out(_render_netlist(components, nets, report, result, links, constraints))
     else:
-        print(_render(components, report, result, constraints, args.show_ignored_columns))
+        out(_render(components, report, result, constraints, args.show_ignored_columns))
 
     if any(f.severity == "critical" for f in result.findings):
         return EXIT_FINDINGS

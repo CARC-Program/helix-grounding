@@ -286,3 +286,28 @@ def test_ops_and_api_stay_out_of_the_published_wheel():
     assert "helix_ops" not in packages
     assert "helix_api" not in packages
     assert "helix_grounding" in packages
+
+
+def test_the_draft_success_path_actually_runs(tmp_path, capsys):
+    """This path had no test, and it was broken: two calls passed
+    `file=sys.stderr` to a helper that takes one argument, so any successful
+    draft would have raised TypeError. Every existing draft test returned early
+    on a refusal, so the suite stayed green over a command that could not
+    complete. A refusal test is not a substitute for a success test."""
+    out_path = tmp_path / "post.md"
+    assert main(["draft", "reddit_pcb", "--out", str(out_path)]) == 0
+    assert "pip install helix-grounding" in out_path.read_text(encoding="utf-8")
+
+    captured = capsys.readouterr()
+    assert "Draft written to" in captured.err
+    assert "Adapt this before posting" in captured.err
+
+
+def test_draft_diagnostics_never_touch_stdout(capsys):
+    """stdout carries the post and nothing else. A grounding line mixed into it
+    ends up pasted into Reddit along with the draft."""
+    main(["draft", "reddit_pcb"])
+    captured = capsys.readouterr()
+    assert "[grounding]" not in captured.out
+    assert "[grounding]" in captured.err
+    assert captured.out.lstrip().startswith("**")

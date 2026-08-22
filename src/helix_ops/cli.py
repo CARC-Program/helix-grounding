@@ -18,20 +18,28 @@ import argparse
 import sys
 from pathlib import Path
 
+from helix_bom.cli import err, out
+
+from . import verify as verifier
 from .campaign import PREREQUISITES, RESPONSE_KINDS, Campaign
 from .drafts import BY_KEY, CHANNELS, DraftError, render, verify
 from .facts import gather
 
 EXIT_OK, EXIT_REFUSED = 0, 1
 
+# `out` and `err` come from the BOM CLI rather than being reimplemented,
+# because this console has exactly the same problem: the drafts are full of em
+# dashes, and `helix-ops draft` on a cp437 terminal would die the same way
+# `helix-bom demo` did. One implementation, tested in one place.
+
 
 def _facts(args):
     facts = gather(run_tests=args.run_tests)
-    print(facts.describe())
+    out(facts.describe())
     if args.sources:
-        print("\nwhere each came from:")
+        out("\nwhere each came from:")
         for key, source in facts.sources.items():
-            print(f"  {key:<22} {source}")
+            out(f"  {key:<22} {source}")
     return EXIT_OK
 
 
@@ -43,15 +51,14 @@ def _report_grounding(text, facts) -> bool:
         # "0 ungrounded" on text containing no numbers is true and useless,
         # and reading it as approval is the same error as a BOM review that
         # stayed quiet about the checks it could not run.
-        print("\n[grounding] no numeric claims in this draft — nothing to check.",
-              file=sys.stderr)
+        err("\n[grounding] no numeric claims in this draft — nothing to check.")
         return True
     if report.is_grounded:
-        print(f"\n[grounding] {report.summary()}", file=sys.stderr)
+        err(f"\n[grounding] {report.summary()}")
         return True
-    print(f"\n[grounding] {report.summary()}", file=sys.stderr)
-    print("[grounding] Refusing. Every number in a launch post has to be one "
-          "this repository can produce.", file=sys.stderr)
+    err(f"\n[grounding] {report.summary()}")
+    err("[grounding] Refusing. Every number in a launch post has to be one "
+        "this repository can produce.")
     return False
 
 
@@ -61,7 +68,7 @@ def _draft(args):
     try:
         text = render(args.channel, facts)
     except DraftError as exc:
-        print(f"helix-ops: {exc}", file=sys.stderr)
+        err(f"helix-ops: {exc}")
         return EXIT_REFUSED
 
     if not _report_grounding(text, facts):
@@ -69,15 +76,14 @@ def _draft(args):
 
     if args.out:
         Path(args.out).write_text(text, encoding="utf-8")
-        print(f"Draft written to {args.out}", file=sys.stderr)
+        err(f"Draft written to {args.out}")
     else:
-        print(text)
+        out(text)
 
-    print(f"\n[{channel.name}] {channel.caution}", file=sys.stderr)
-    print("\n[reminder] Adapt this before posting. Anything that reads as "
-          "copy-and-paste marketing gets ignored, and your own words will land "
-          "better than mine. Re-check it afterwards with `check <file>`.",
-          file=sys.stderr)
+    err(f"\n[{channel.name}] {channel.caution}")
+    err("\n[reminder] Adapt this before posting. Anything that reads as "
+        "copy-and-paste marketing gets ignored, and your own words will land "
+        "better than mine. Re-check it afterwards with `check <file>`.")
     return EXIT_OK
 
 
@@ -89,35 +95,63 @@ def _check(args):
 
 def _status(args):
     campaign = Campaign.load(args.store)
-    print(campaign.milestone_status())
-    print()
-    print("prerequisites:")
+    out(campaign.milestone_status())
+    out()
+    facts = gather()
+    out("prerequisites:")
     for key, description in PREREQUISITES.items():
-        mark = "x" if campaign.prerequisites.get(key) else " "
-        print(f"  [{mark}] {key:<16} {description}")
-    print()
-    print("channels:")
+        recorded = bool(campaign.prerequisites.get(key))
+        mark = "x" if recorded else " "
+        observed, why = verifier.check(key, facts.repo_url)
+        if observed is None:
+            note = "  (on trust)"
+        elif observed == recorded:
+            note = "  (verified)"
+        else:
+            note = f"  <- DISAGREES: {why}"
+        out(f"  [{mark}] {key:<16} {description}{note}")
+    out()
+    out("channels:")
     for channel in sorted(CHANNELS, key=lambda c: c.order):
         post = campaign.posts[channel.key]
         detail = f" {post.posted_at} {post.url}".rstrip() if post.url else ""
-        print(f"  {post.state:<8} {channel.key:<12} {channel.name}{detail}")
-    print()
-    print("next:")
-    print(f"  {campaign.next_action()}")
+        out(f"  {post.state:<8} {channel.key:<12} {channel.name}{detail}")
+    out()
+    out("next:")
+    out(f"  {campaign.next_action()}")
     return EXIT_OK
 
 
 def _next(args):
-    print(Campaign.load(args.store).next_action())
+    out(Campaign.load(args.store).next_action())
     return EXIT_OK
 
 
 def _mark_ready(args):
     campaign = Campaign.load(args.store)
-    campaign.mark_prerequisite(args.prerequisite, not args.undo)
+    claim = not args.undo
+
+    # The reason this exists: on 2026-08-19 the store recorded
+    # repo_public: true against a private repository, and nothing noticed
+    # for two days. Where the world can be looked at, looking beats being
+    # told -- and a tracker that records a false fact is worse than no
+    # tracker, because it is consulted instead of the world.
+    facts = gather()
+    observed, why = verifier.check(args.prerequisite, facts.repo_url)
+    if observed is not None and observed != claim and not args.anyway:
+        err(f"helix-ops: refusing. You said {args.prerequisite}="
+            f"{str(claim).lower()}, but {why}.")
+        err("Fix the world, or pass --anyway if the check itself is wrong.")
+        return EXIT_REFUSED
+
+    campaign.mark_prerequisite(args.prerequisite, claim)
     campaign.save(args.store)
-    print(f"{args.prerequisite}: {'met' if not args.undo else 'not met'}")
-    print(f"\nnext: {campaign.next_action()}")
+    state = "met" if claim else "not met"
+    if observed is None:
+        out(f"{args.prerequisite}: {state} (recorded on trust \u2014 {why})")
+    else:
+        out(f"{args.prerequisite}: {state} (verified \u2014 {why})")
+    out(f"\nnext: {campaign.next_action()}")
     return EXIT_OK
 
 
@@ -125,8 +159,8 @@ def _posted(args):
     campaign = Campaign.load(args.store)
     campaign.mark_posted(args.channel, args.url, args.on)
     campaign.save(args.store)
-    print(f"Recorded: {BY_KEY[args.channel].name} posted at {args.url}")
-    print(f"\nnext: {campaign.next_action()}")
+    out(f"Recorded: {BY_KEY[args.channel].name} posted at {args.url}")
+    out(f"\nnext: {campaign.next_action()}")
     return EXIT_OK
 
 
@@ -137,16 +171,16 @@ def _response(args):
             args.channel, args.kind, args.summary,
             ran_it=args.ran, action=args.action or "", on=args.on)
     except ValueError as exc:
-        print(f"helix-ops: {exc}", file=sys.stderr)
+        err(f"helix-ops: {exc}")
         return EXIT_REFUSED
     campaign.save(args.store)
-    print(f"Recorded on {BY_KEY[args.channel].name}: {RESPONSE_KINDS[args.kind]}")
+    out(f"Recorded on {BY_KEY[args.channel].name}: {RESPONSE_KINDS[args.kind]}")
     if args.kind == "ran_nothing_found":
-        print("\nAsk them one question: did it tell you anything you did not "
+        out("\nAsk them one question: did it tell you anything you did not "
               "already know? A tool that runs cleanly and teaches nothing is "
               "not yet worth money, and that is the single most useful thing "
               "to learn early.")
-    print(f"\nnext: {campaign.next_action()}")
+    out(f"\nnext: {campaign.next_action()}")
     return EXIT_OK
 
 
@@ -154,11 +188,11 @@ def _resolve(args):
     campaign = Campaign.load(args.store)
     campaign.resolve(args.channel, args.index, args.action)
     campaign.save(args.store)
-    print(f"Resolved #{args.index} on {BY_KEY[args.channel].name}.")
-    print("\nReply to the reporter with the commit. That reply is worth more "
+    out(f"Resolved #{args.index} on {BY_KEY[args.channel].name}.")
+    out("\nReply to the reporter with the commit. That reply is worth more "
           "than the original post — it is public evidence you are someone who "
           "fixes things.")
-    print(f"\nnext: {campaign.next_action()}")
+    out(f"\nnext: {campaign.next_action()}")
     return EXIT_OK
 
 
@@ -199,6 +233,10 @@ def build_parser() -> argparse.ArgumentParser:
     ready = sub.add_parser("mark-ready", help="record a prerequisite as met")
     ready.add_argument("prerequisite", choices=sorted(PREREQUISITES))
     ready.add_argument("--undo", action="store_true")
+    ready.add_argument("--anyway", action="store_true",
+                       help="record the claim even though the check "
+                            "disagrees (use when the check is wrong, "
+                            "not when the world is)")
     ready.set_defaults(func=_mark_ready)
 
     posted = sub.add_parser("posted", help="record that a post went up")

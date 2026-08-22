@@ -1,6 +1,6 @@
 {
   "prerequisites": {
-    "repo_public": false,
+    "repo_public": true,
     "pypi_published": false,
     "demo_works": false
   },

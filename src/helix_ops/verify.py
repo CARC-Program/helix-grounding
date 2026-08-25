@@ -38,16 +38,13 @@ GH_FALLBACKS = (
 )
 
 UNVERIFIABLE = {
-    "pypi_published": (
-        "needs a network call to the package index, which this module does not "
-        "make. Confirm it by installing into a clean virtualenv on a machine "
-        "that has never seen the source."
-    ),
     "demo_works": (
         "means the demo ran on somebody else's machine. That is a fact about a "
         "person, not about this repository, and nothing here can observe it."
     ),
 }
+
+PYPI_JSON = "https://pypi.org/pypi/{package}/json"
 
 
 def gh_path() -> str | None:
@@ -104,10 +101,47 @@ def check_repo_public(repo_url: str) -> tuple[bool | None, str]:
     return public, f"{slug} is {visibility.lower()}"
 
 
-def check(key: str, repo_url: str) -> tuple[bool | None, str]:
+def check_pypi_published(package: str) -> tuple[bool | None, str]:
+    """Ask the package index whether this package exists, and at what version.
+
+    This makes a network call, which is a deliberate exception worth naming.
+    The offline guarantee belongs to `helix_grounding` and `helix_bom` — the
+    shipped product, where a customer's bill of materials must never leave
+    their machine, and where a test disables the socket layer to prove it.
+    `helix_ops` is internal tooling that already shells out to git, pytest and
+    the GitHub CLI. Nothing here touches customer data.
+
+    The reason it is worth the exception: this prerequisite was declared
+    unverifiable and recorded on trust, and it sat reading ``false`` for a week
+    while the package was live on PyPI. A question answerable by one public GET
+    should not be answered by asking a person to remember.
+    """
+    import urllib.error
+    import urllib.request
+
+    try:
+        with urllib.request.urlopen(
+                PYPI_JSON.format(package=package), timeout=15) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        if exc.code == 404:
+            return False, f"{package} is not on PyPI"
+        return None, f"the package index returned HTTP {exc.code}"
+    except (urllib.error.URLError, OSError, ValueError) as exc:
+        # No network is "I could not look", never "it is not published".
+        return None, f"could not reach the package index ({exc})"
+
+    latest = payload.get("info", {}).get("version", "?")
+    count = len(payload.get("releases", {}))
+    return True, f"{package} {latest} is live ({count} release(s) published)"
+
+
+def check(key: str, repo_url: str, package: str = "helix-grounding") -> tuple[bool | None, str]:
     """Verify one prerequisite. ``None`` means it is not checkable from here."""
     if key == "repo_public":
         return check_repo_public(repo_url)
+    if key == "pypi_published":
+        return check_pypi_published(package)
     if key in UNVERIFIABLE:
         return None, UNVERIFIABLE[key]
     return None, "no verifier for this prerequisite"

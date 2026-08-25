@@ -1,7 +1,7 @@
 {
   "prerequisites": {
     "repo_public": true,
-    "pypi_published": false,
+    "pypi_published": true,
     "demo_works": false
   },
   "posts": {

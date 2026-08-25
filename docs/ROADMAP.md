@@ -37,9 +37,16 @@ output.*
       twine passes, and a clean-venv install proves the zero-dependency claim
 - [x] Copyright and authorship set — the author holds copyright, and the
       account owner is a separate field that does not imply authorship
-- [ ] **Actually publish it.** Needs a PyPI account and a final pass over
-      what the package metadata makes public, which is permanent once
-      mirrors copy it
+- [x] **Published.** `pip install helix-grounding` has worked since
+      2026-08-16. Worth recording how that was discovered: the launch
+      tracker read `pypi_published: false` for a week because the check
+      was declared unverifiable and recorded on trust. It is one public
+      GET. It is now verified, and the roadmap was wrong about its own
+      state for eight days
+- [ ] **Ship 0.1.2 to PyPI.** The live release crashes on the first
+      command in the README for anyone on a cp437 or cp850 console, and
+      reports the wrong `__version__`. Both are fixed and built; the
+      upload is the only step left
 - [ ] A third domain, ideally chosen by whoever adopts it first rather than
       guessed at here
 

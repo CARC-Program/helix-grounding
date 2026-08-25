@@ -103,7 +103,7 @@ def _status(args):
     for key, description in PREREQUISITES.items():
         recorded = bool(campaign.prerequisites.get(key))
         mark = "x" if recorded else " "
-        observed, why = verifier.check(key, facts.repo_url)
+        observed, why = verifier.check(key, facts.repo_url, facts.package)
         if observed is None:
             note = "  (on trust)"
         elif observed == recorded:
@@ -138,7 +138,7 @@ def _mark_ready(args):
     # told -- and a tracker that records a false fact is worse than no
     # tracker, because it is consulted instead of the world.
     facts = gather()
-    observed, why = verifier.check(args.prerequisite, facts.repo_url)
+    observed, why = verifier.check(args.prerequisite, facts.repo_url, facts.package)
     if observed is not None and observed != claim and not args.anyway:
         err(f"helix-ops: refusing. You said {args.prerequisite}="
             f"{str(claim).lower()}, but {why}.")

@@ -57,7 +57,10 @@ Changelog = "https://github.com/CARC-Program/helix-grounding/blob/main/CHANGELOG
 [project.scripts]
 helix-bom = "helix_bom.cli:main"
 # Deliberately not published: see the wheel packages note below. Reachable
-# from a source checkout as `python -m helix_ops.cli`.
+# from a source checkout as `python ops.py` -- the launcher at the repo root,
+# which works without an install or a PYTHONPATH. `python -m helix_ops.cli`
+# only works if src/ is already on the path, and that caught out the first
+# person who was not its author.
 
 [tool.hatch.build.targets.wheel]
 # helix_api is deliberately absent: an undeployed skeleton is not something to

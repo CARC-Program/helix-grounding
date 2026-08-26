@@ -72,8 +72,8 @@ through it and gets a report back.*
 - [x] Make that playbook executable rather than written. `helix_ops`
       renders each post from live repository facts, refuses any figure the
       repo cannot produce, withholds the next channel while a bug report is
-      open, and counts only people who actually ran the tool. `python -m
-      helix_ops.cli status` answers "how far am I" from recorded events
+      open, and counts only people who actually ran the tool. `python
+      ops.py status` answers "how far am I" from recorded events
 - [ ] Get it in front of hardware makers who have never spoken to the
       author. Everything above is preparation; this is the milestone.
       Playbook in `docs/FIRST_USERS.md` — the ask is a bug report, not a

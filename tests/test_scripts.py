@@ -12,6 +12,8 @@ the README does something, and an untested script is a promise nobody checked.
 """
 
 import importlib.util
+import os
+import subprocess
 import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -68,3 +70,26 @@ def test_the_exported_interconnect_is_not_an_empty_canvas(tmp_path):
     assert len(boxes) >= 4, "fewer component boxes than the fixture has parts"
     assert lines, "no connections drawn"
     assert all(float(el.get("width")) > 0 for el in boxes), "zero-width boxes"
+
+
+def test_the_ops_launcher_works_without_an_install(tmp_path):
+    """`python -m helix_ops.cli` fails on a fresh checkout, and did so for the
+    first person who was not its author.
+
+    helix_ops is deliberately absent from the published wheel, so it is only
+    importable when src/ is already on the path -- true in a checkout with an
+    editable install, false everywhere else. The instruction in the docs was
+    therefore only ever correct on the machine it was written on.
+
+    This runs the launcher as a subprocess with PYTHONPATH stripped and the
+    working directory elsewhere, which is the only arrangement that would have
+    caught it.
+    """
+    env = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
+    result = subprocess.run(
+        [sys.executable, str(SCRIPTS.parent / "ops.py"), "status"],
+        cwd=tmp_path, capture_output=True, text=True, timeout=180, env=env,
+    )
+    assert result.returncode == 0, result.stderr[-500:]
+    assert "prerequisites:" in result.stdout
+    assert "ModuleNotFoundError" not in result.stderr

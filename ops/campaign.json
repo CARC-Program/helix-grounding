@@ -2,7 +2,7 @@
   "prerequisites": {
     "repo_public": true,
     "pypi_published": true,
-    "demo_works": false
+    "demo_works": true
   },
   "posts": {
     "reddit_pcb": {

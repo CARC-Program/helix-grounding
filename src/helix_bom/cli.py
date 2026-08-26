@@ -26,7 +26,7 @@ from .netlist import connectivity_findings, interconnect_from_nets, load_netlist
 # argparse internals, because helix_ops quotes it in launch posts and a
 # private attribute is not something a published claim should rest on. A test
 # fails if this and the parser ever disagree.
-COMMANDS = ("demo", "diagnose", "review")
+COMMANDS = ("demo", "diagnose", "review", "enrich")
 
 SEVERITY_ORDER = {"critical": 0, "warning": 1, "info": 2}
 SAMPLE_BOM = Path(__file__).parent / "examples" / "sample_bom.csv"
@@ -565,11 +565,48 @@ def build_parser() -> argparse.ArgumentParser:
     review.add_argument("--strict", action="store_true",
                         help="exit non-zero if any check could not run")
 
+    # `enrich` is the check the archive said was missing. See
+    # docs/DEMAND_EVIDENCE.md: every distributor already solves ordering, and
+    # the accepted answer to "can I order from a BOM?" is "yes, as long as you
+    # have a manufacturer part number in there". This checks that they are real,
+    # current, and priced at the quantity actually being bought.
+    enrich_cmd = sub.add_parser(
+        "enrich",
+        help="check a BOM's part numbers against a distributor")
+    enrich_cmd.add_argument("file", type=Path, nargs="?",
+                            help="a BOM export or KiCad netlist")
+    enrich_cmd.add_argument("--offline", action="store_true",
+                            help="use built-in demonstration data instead of a "
+                                 "distributor. The prices are invented and the "
+                                 "report says so.")
+    enrich_cmd.add_argument("--compare", action="store_true",
+                            help="ask every distributor rather than stopping at "
+                                 "the first match (more calls, better prices)")
+    enrich_cmd.add_argument("--fresh", action="store_true",
+                            help="ignore cached prices and re-fetch everything")
+    enrich_cmd.add_argument("--cache-ttl", type=float, default=None,
+                            metavar="HOURS",
+                            help="how long a cached price stays usable "
+                                 "(default 12)")
+    enrich_cmd.add_argument("--clear-cache", action="store_true",
+                            help="empty the price cache and exit")
+    enrich_cmd.add_argument("--check-key", action="store_true",
+                            help="look one known part up and report exactly what "
+                                 "happened. Use this to prove a new key works.")
+    enrich_cmd.add_argument("--json", action="store_true",
+                            help="emit JSON instead of text")
+    enrich_cmd.add_argument("--strict", action="store_true",
+                            help="exit non-zero if any line could not be checked")
+
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+
+    if args.command == "enrich":
+        from .enrich_cli import run_enrich
+        return run_enrich(args)
 
     if args.command == "diagnose":
         args.budget, args.power, args.enclosure = 0.0, 0.0, None

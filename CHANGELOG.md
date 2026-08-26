@@ -1,5 +1,74 @@
 # Changelog
 
+## 0.2.0 — 2026-08-26
+
+> **`helix-bom enrich` checks your part numbers against somebody who actually
+> sells the part.** Obsolete parts, reel-only minimums, prices that are wrong at
+> the quantity you are buying, and near-matches that are a different part. It
+> says which lines it could not check, and why, as loudly as what it found.
+
+### Added
+
+**`helix-bom enrich <file>`.** Reads a BOM or a KiCad netlist and asks a
+distributor about every manufacturer part number in it. Seven checks:
+
+- the part does not exist — a typo, or an internal number nobody else knows
+- the part is obsolete — the board cannot be built from this design
+- the part is NRND — buildable once, probably not next year
+- stock is short of the build, or there is none and a lead time instead
+- the quantity is below the minimum — you need three, they sell a reel of 3000
+- the price is not the price — costed at one-off while buying a hundred, or the reverse
+- only near matches came back — a suffix apart is a different reel, tape or grade
+
+Why this and not something else: `docs/DEMAND_EVIDENCE.md` reads twenty answers
+to eight questions about getting a usable BOM out of a CAD tool. The accepted
+answer to "can I order components from a BOM?" is *yes, vendor import works
+fine — as long as you have a manufacturer part number in there*. Every
+distributor already solves ordering. Nobody solves arriving at it with part
+numbers that are real, current, and priced at the quantity being bought.
+
+**Mouser and Digi-Key adapters.** Credentials come from the environment
+(`MOUSER_API_KEY`, or `DIGIKEY_CLIENT_ID` and `DIGIKEY_CLIENT_SECRET`) and are
+never written to the cache, a log, or an error message. Set `DIGIKEY_SANDBOX=1`
+to use Digi-Key's sandbox host.
+
+**These two adapters have never been run against the live APIs from here.**
+Getting credentials needs an account, and the account terms are the account
+holder's to read and accept. The request and response handling is written from
+the published specifications and tested against recorded fixtures, which proves
+the parsing and proves nothing about the network. The report says so on every
+run, and `helix-bom enrich --check-key` looks one known part up and tells you
+exactly what happened, in a form you can paste into an issue. If it works,
+please say so, and the flag can stop saying False.
+
+**A price cache**, on by default, twelve hours. The call limits are small —
+Mouser allows a thousand a day and thirty a minute — and a two-hundred-line BOM
+re-run five times would spend the day's allowance. Every price carries the
+moment it was fetched and the report prints its age, because a cached price
+presented as current is worse than no price: somebody quotes it. `--fresh`
+re-fetches, `--clear-cache` empties it.
+
+**`--offline`** runs against six built-in parts with invented prices, so the
+feature can be seen working without a key. The report leads with a banner
+saying the numbers are made up, and the catalogue answers "not checked" rather
+than "not found" for anything it does not hold — six invented parts cannot
+support the claim that a part does not exist.
+
+### Notes
+
+Still no runtime dependencies. Prices are parsed as decimals rather than floats,
+and read correctly whether they arrive as `$0.19`, `0,19 €`, `1,234.56` or
+`1.234,56` — the last two being the same number written by different halves of
+the world, and confusing them is a factor-of-a-thousand error on a reel.
+
+Part numbers are folded for case and nothing else. `TPS61023DRLR` and
+`TPS61023DRLT` differ only in the reel and are different orderable parts; a
+normaliser clever enough to call them equal would approve a BOM that cannot be
+assembled. Near matches are shown to you to choose from, never substituted.
+
+Nothing in this release can spend money. There is no ordering method and no
+cart method, and the base class has none to override.
+
 ## 0.1.2 — 2026-08-22
 
 > **If you review boards as well as buy parts, this is the release that

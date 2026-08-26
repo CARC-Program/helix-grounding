@@ -1,0 +1,7 @@
+Designator;Description;Quantity;Manufacturer;Manufacturer Part Number;Unit Price;Lead Time (days);DNP
+U1;Humidity/pressure/temperature sensor;1;Bosch;BME280;$4.10;14;
+U2;Dot/bar display driver;2;Texas Instruments;LM3914N;$1.20;30;
+U3;Schmitt-trigger inverter;3;Texas Instruments;SN74LVC1G14DBVR;$0.05;7;
+U4;Boost converter 3.7A;1;Texas Instruments;TPS61023DRLT;$0.90;21;
+C1, C2, C3, C4;Capacitor 100nF 50V X7R 0603;4;Murata;GRM188R71H104KA93D;$0.055;7;
+R1, R2;Resistor 10k 1% 0603;2;Yageo;;$0.02;7;

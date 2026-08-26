@@ -1730,3 +1730,68 @@ prints "not a finding — read the answers" on every run, and `score.py` carries
 the limitation in a comment beside the word list that causes it, because the
 next person to use that list will be in a different domain where "by hand" means
 something else again.
+
+## D-050 — Distributor enrichment, built on the evidence rather than the plan
+
+**Decision:** add `helix-bom enrich`, a check of a BOM's part numbers against a
+distributor, with adapters for Mouser and Digi-Key and a loudly-labelled offline
+catalogue for the demo.
+
+**Why this and not something else.** D-049 read twenty answers to eight
+questions about getting a usable BOM out of a CAD tool. The accepted answer to
+"can I order components from a BOM?" was *yes, vendor import works fine — as
+long as you have a manufacturer part number in there*. Every distributor already
+solves ordering; Octopart, Digi-Key's BOM manager and Arena all assume the BOM
+arriving is already correct. Nobody serves the step before that. That is where
+this tool sits, and it is the first feature here chosen from measured demand
+rather than from what seemed useful.
+
+**The shape follows from three rules this project already had.**
+
+Nothing is invented. That is what `components.py` was written to prevent and
+what the whole library is for; a lookup that fails says so.
+
+"Not found" and "not checked" are different answers, and `Outcome` has three
+values rather than two. A run with no API key must not produce forty critical
+findings saying the parts do not exist. This is the same failure as the
+physical-fit check that passed silently on a BOM with no dimensions in it, and
+it got the same treatment: the not-checked count is printed above the findings,
+with the reason for each.
+
+A cached price is not a current price. Every offer carries its fetch time and
+the report prints the age. Caching was not optional — Mouser allows a thousand
+calls a day and thirty a minute, and a two-hundred-line BOM re-run five times
+spends the day.
+
+**Two mistakes caught while building it, both of the usual kind.**
+
+The offline catalogue holds six parts and returned NOT_FOUND for everything
+else. Run against the real sample BOM it produced nine CRITICAL findings
+announcing that STM32F401RET6, RC0603FR-0710KL and seven other jellybean parts
+do not exist — a demo catalogue passing itself off as the market. It returns
+NOT_CHECKED now, and a test pins it.
+
+`helix-bom enrich` on an unparseable file gave a traceback where `review` gives
+a sentence, because `load_bom` raises rather than returning empty. Caught by a
+test that expected the friendly path.
+
+**What has not been proven.** The Mouser and Digi-Key adapters have never spoken
+to the live APIs. Credentials require an account and the account terms are the
+account holder's to read and accept, so the parsing is tested against recorded
+fixtures and the network is not tested at all. Rather than let that sit as an
+unstated gap, `verified_against_live_api` is a field on the capability record,
+it is False, the report prints a note whenever an unverified adapter is used,
+and `--check-key` exists so the first person with a real key can settle it in
+one command. The honest version of shipping something untested is shipping it
+with the untested part labelled.
+
+**Cost impact:** none in dependencies; stdlib only, as with everything else in
+the wheel. Prices are `Decimal` rather than `float` throughout, and the money
+parser handles both comma and point decimal conventions because confusing them
+is a factor-of-a-thousand error on a reel.
+
+**Future implications:** the interface takes a distributor, so LCSC, Farnell or
+Octopart are additions rather than rewrites. Nothing in the layer can spend
+money — there is no ordering method and the base class has none to override —
+and that should stay true: this answers questions about parts, and buying them
+is a person's decision made on a distributor's own site.

@@ -1628,3 +1628,55 @@ the honest reading of `helix_ops status` is that it currently reports three
 unmet prerequisites and zero strangers, and it will keep reporting that until
 somebody opens an account.
 
+## D-048 — Mine the archive instead of monitoring the stream
+
+**Decision:** build `helix_signal` as a miner over an existing question archive
+rather than the 24/7 monitor the specification described, and keep the
+clustering deterministic and dependency-free.
+
+**Why:** the volume was measured before anything was built.
+`electronics.stackexchange.com` has had zero new "bill of materials" questions
+in ninety days and gets roughly one KiCad question every nine days. A poller on
+a five-minute cycle would spend 288 of a 300-request daily quota to find about
+one relevant question a week. The same source holds 10,823 questions written
+over sixteen years, which answers a better question than "what arrived today":
+what has gone wrong repeatedly, for long enough that it is not a fashion.
+
+**Alternatives considered.** An embedding model would group by meaning rather
+than vocabulary and would catch the two people describing one problem in
+different words — which this cannot. It was rejected for the same reason the
+rest of this codebase computes rather than infers: a model asked to group ten
+thousand questions cannot tell you which words made a group, cannot be re-run to
+the same answer, and adds a dependency to a project whose selling point is that
+it has none. The limitation is real and is written into `cluster.py` and
+`DEMAND_EVIDENCE.md` rather than glossed.
+
+**What it found:** 42% of everything that grouped is about operating a design
+tool rather than about electronics. See `docs/DEMAND_EVIDENCE.md`.
+
+**Two mistakes worth recording, because both are this project's recurring
+failure in new clothing.**
+
+The first ranking was topped by six groups of four questions, each winning on a
+percentage computed from three of them, while a group of 137 sat at rank five.
+Nothing was broken and the arithmetic was right; it was a confident number that
+meant nothing. Every proportion is now pulled toward the corpus rate by weight
+k/(n+k), so a small group has to be extraordinary to move at all.
+
+The first draft of the findings document reported the headline group as an
+unmet need with four unanswered questions. All eight have accepted answers. The
+tool had printed the vote count as a bare `[ 0]` and the author read it as an
+answer count — a display that could be misread, read wrong by the first person
+to read it. The column is now labelled, and the correction is left in the
+document rather than quietly fixed.
+
+**Cost impact:** none in dependencies. `helix_signal` is stdlib only and stays
+out of the wheel, like `helix_ops` and `helix_api`. The harvested corpus is
+gitignored: it is several megabytes of other people's CC BY-SA prose, and what
+belongs in the repository is what this project derived from it plus the links
+back.
+
+**Future implications:** the monitor is not cancelled, it is unbuilt until there
+is something to monitor. The candidate source with live volume is Reddit, which
+is blocked on a contract nobody here can sign — recorded as data in
+`sources/base.py` rather than as a comment somebody has to remember.

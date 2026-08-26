@@ -222,7 +222,7 @@ pip install -e ".[dev]"
 pytest
 ```
 
-373 tests, nothing skipped, no database and no services required.
+410 tests, nothing skipped, no database and no services required.
 
 ```
 src/helix_grounding/   the library
@@ -234,7 +234,7 @@ docs/                  decision log, architecture, business model, case study
                        FIRST_USERS.md — how the first users get found
 ```
 
-`docs/DECISION_LOG.md` is 47 decisions with the reasoning attached, including
+`docs/DECISION_LOG.md` is 48 decisions with the reasoning attached, including
 the bugs that produced the design above. It is the most useful file here for
 understanding *why* rather than *what*.
 

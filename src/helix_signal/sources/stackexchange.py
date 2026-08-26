@@ -45,22 +45,31 @@ TERMS_URL = "https://stackexchange.com/legal/api-terms-of-use"
 # Strips HTML without a dependency. The API returns question bodies as HTML and
 # this layer wants text to match against; a parser dependency for this would
 # cost more than it is worth in a package whose neighbours have none.
+import html as _html
 import re as _re
 
 _TAG = _re.compile(r"<[^>]+>")
 _WS = _re.compile(r"[ \t]+")
-_ENTITIES = {
-    "&quot;": '"', "&#39;": "'", "&amp;": "&", "&lt;": "<", "&gt;": ">",
-    "&nbsp;": " ", "&hellip;": "...", "&mdash;": "-", "&ndash;": "-",
-}
 
 
-def html_to_text(html: str) -> str:
-    text = _TAG.sub(" ", html or "")
-    for entity, plain in _ENTITIES.items():
-        text = text.replace(entity, plain)
-    text = _WS.sub(" ", text)
-    return "\n".join(line.strip() for line in text.splitlines() if line.strip())
+def html_to_text(text: str) -> str:
+    """Tags out first, then entities decoded. The order is the whole point.
+
+    Stack Exchange escapes titles, so ``&lt;b&gt;`` in a title means the user
+    literally typed ``<b>``. Decoding before stripping would turn their text
+    into markup and then delete it; stripping first means real markup goes and
+    typed-out markup stays.
+
+    Entity decoding started as a hand-written table of nine common names. Across
+    ten thousand harvested questions it left 84 entities undecoded -- the
+    degree, micro, delta and ohm signs that electronics questions are full of,
+    plus every numeric escape. ``html.unescape`` ships with Python and knows all
+    of them, so the table was a worse version of something already installed.
+    """
+    stripped = _TAG.sub(" ", text or "")
+    decoded = _html.unescape(stripped)
+    collapsed = _WS.sub(" ", decoded)
+    return "\n".join(line.strip() for line in collapsed.splitlines() if line.strip())
 
 
 class QuotaExhausted(RuntimeError):
@@ -78,6 +87,11 @@ class StackExchangeSource(OpportunitySource):
         self._sleep = sleep
         self.quota_remaining: int | None = None
         self.last_backoff: float = 0.0
+        # Set from every response. The caller needs it to know whether a page
+        # limit truncated a read or the archive genuinely ended -- reporting a
+        # truncated corpus as a complete one is how a sample gets mistaken for
+        # a census.
+        self.has_more: bool = False
 
     @property
     def capabilities(self) -> Capabilities:
@@ -125,6 +139,7 @@ class StackExchangeSource(OpportunitySource):
             raise RuntimeError(f"could not reach Stack Exchange ({exc})") from exc
 
         self.quota_remaining = payload.get("quota_remaining", self.quota_remaining)
+        self.has_more = bool(payload.get("has_more", False))
 
         # The server asks for a pause in-band. Honouring it is the difference
         # between using an API and abusing one.
@@ -136,14 +151,23 @@ class StackExchangeSource(OpportunitySource):
         return payload
 
     # ------------------------------------------------------------- collect
-    def collect(self, query: str = "", limit: int = 25) -> list:
-        """Search the site, or read the newest questions when no query given."""
+    def collect(self, query: str = "", limit: int = 25, page: int = 1,
+                tagged: str = "", sort: str = "creation") -> list:
+        """Search the site, or read questions by tag, or read the newest.
+
+        ``tagged`` is the precise instrument and ``query`` the blunt one: a tag
+        was applied by a person who read the question, whereas a text search
+        matches whatever the words happen to hit. Prefer a tag where one exists.
+        """
         params = {
             "pagesize": min(max(limit, 1), 100),
+            "page": max(int(page), 1),
             "order": "desc",
-            "sort": "creation",
+            "sort": sort,
             "filter": "withbody",
         }
+        if tagged:
+            params["tagged"] = tagged
         if query:
             params["q"] = query
             path = "search/advanced"
@@ -152,6 +176,25 @@ class StackExchangeSource(OpportunitySource):
 
         payload = self._get(path, params)
         return [self._normalise(item) for item in payload.get("items", [])]
+
+    def tags(self, limit: int = 100, page: int = 1, inname: str = "") -> list:
+        """The site's real tags, with how many questions carry each.
+
+        This exists so a corpus read is aimed at labels that exist rather than
+        at ones that seemed plausible. A corpus assembled from guessed search
+        terms is evidence about the guesser.
+        """
+        params = {
+            "pagesize": min(max(limit, 1), 100),
+            "page": max(int(page), 1),
+            "order": "desc",
+            "sort": "popular",
+        }
+        if inname:
+            params["inname"] = inname
+        payload = self._get("tags", params)
+        return [{"name": t.get("name", ""), "count": int(t.get("count", 0))}
+                for t in payload.get("items", [])]
 
     def _normalise(self, item: dict) -> SourceItem:
         return SourceItem(

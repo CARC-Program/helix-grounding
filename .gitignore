@@ -37,3 +37,8 @@ desktop.ini
 # release checklists, market research, and the legal/ownership record, which
 # names real people. Nothing here helps somebody use the library.
 private/
+
+# Harvested corpora. Several megabytes of other people's CC BY-SA prose,
+# fetched once and reused. What belongs in the repository is what this project
+# derived from it -- counts, clusters, conclusions -- plus the links back.
+data/corpus/

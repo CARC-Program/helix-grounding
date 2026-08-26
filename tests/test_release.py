@@ -133,6 +133,17 @@ def test_internal_packages_leaking_into_the_wheel_are_caught(fake_repo):
     assert "helix_ops" in check.detail
 
 
+def test_every_internal_package_is_named_in_the_wheel_check():
+    """A new internal package that nobody adds to the check ships silently.
+    helix_signal was created after this check was written and would have gone
+    out in the wheel had the list not been updated with it."""
+    import inspect
+    from helix_ops import release as release_module
+    source = inspect.getsource(release_module.check_wheel_excludes_internal)
+    for name in ("helix_ops", "helix_api", "helix_signal"):
+        assert name in source, f"{name} is not checked for
+
+
 # --------------------------------------------------------------------
 # The detector
 # --------------------------------------------------------------------

@@ -176,7 +176,10 @@ def check_wheel_excludes_internal(root: Path) -> Check:
     if not match:
         return Check("wheel contents", False, "no wheel packages list found")
     body = match.group(1)
-    leaked = [name for name in ("helix_ops", "helix_api") if name in body]
+    # Every internal package, named explicitly. A new one that nobody adds
+    # here ships silently, which is how helix_signal would have gone out.
+    leaked = [name for name in ("helix_ops", "helix_api", "helix_signal")
+              if name in body]
     if leaked:
         return Check("wheel contents", False, f"{', '.join(leaked)} would ship")
     return Check("wheel contents", True, "internal packages excluded")

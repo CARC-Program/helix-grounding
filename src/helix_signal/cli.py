@@ -4,14 +4,20 @@
 Not shipped in the wheel. This is research apparatus for deciding what to build
 next, and nobody installing a verification library should receive it.
 
-Four commands, and the split between them is the design:
+Five commands, and the split between them is the design:
 
     tags       ask the site which labels actually exist, and how big each is
     harvest    read questions into a local file, once, within quota
     clusters   group what was read and rank the groups   (offline)
     show       print one group in full                   (offline)
+    answers    read what one group's answers actually say
 
-Only ``harvest`` and ``tags`` touch the network. Everything downstream reads the
+``answers`` is the odd one: it spends quota, because "answered" and "solved" are
+different claims and the difference is only visible in the answer text. It
+caches what it fetches like everything else, and ``--offline`` refuses to spend
+anything.
+
+Only ``harvest``, ``tags`` and ``answers`` touch the network. Everything else reads the
 file on disk, so the analysis can be re-run, argued with and re-run again at no
 cost -- which is the only way an honest conclusion gets reached, because the
 first clustering is never the right one and a re-run that costs quota is a
@@ -28,9 +34,10 @@ from pathlib import Path
 
 from helix_bom.cli import err, out
 
+from .answers import read_answer, summarise
 from .cluster import cluster_items, measure
 from .corpus import DEFAULT_CACHE, CorpusStore, Probe, harvest
-from .sources.stackexchange import StackExchangeSource
+from .sources.stackexchange import QuotaExhausted, StackExchangeSource
 
 EXIT_OK, EXIT_FAILED = 0, 1
 
@@ -117,8 +124,13 @@ def _corpus_summary(items) -> str:
     if ages:
         oldest = max(ages) / 365.25
         span = f", spanning {oldest:.1f} years"
+    # "unanswered" here is Stack Exchange's own test: no accepted answer AND no
+    # answer scoring one or more. Not the same as "nobody replied", and not the
+    # same as "has no accepted answer" either -- of eight questions all reporting
+    # answered, only five had anything accepted.
     return (f"{len(items)} questions{span}\n"
-            f"  {recent} from the last year, {unanswered} with no accepted answer\n"
+            f"  {recent} from the last year, {unanswered} the site does not count\n"
+            f"  as answered (nothing accepted, nothing upvoted)\n"
             f"  licence: " + ", ".join(f"{name} x{count}"
                                       for name, count in sorted(licences.items())))
 
@@ -231,6 +243,103 @@ def _cmd_show(args) -> int:
     return EXIT_OK
 
 
+def _answers_path(args) -> Path:
+    return _cache_path(args).with_name(_cache_path(args).stem + "-answers.jsonl")
+
+
+def _cmd_answers(args) -> int:
+    """Fetch and read the answers to one group's questions.
+
+    Separate from `clusters` because it costs quota and the rest does not, and
+    because the question it settles is a different one: not "what do people ask
+    about" but "did asking get them anywhere".
+    """
+    store = _load(args)
+    if store is None:
+        return EXIT_FAILED
+    items = store.items()
+    result = cluster_items(items, threshold=args.threshold, min_size=args.min_size,
+                           min_df=args.min_df, max_df_ratio=args.max_df)
+    ranked = measure(result["clusters"], items)
+    if not 1 <= args.number <= len(ranked):
+        err(f"there are {len(ranked)} groups; asked for {args.number}.")
+        return EXIT_FAILED
+
+    demand = ranked[args.number - 1]
+    members = {items[i].external_id: items[i] for i in demand.cluster.members}
+
+    path = _answers_path(args)
+    cached = _load_answers(path)
+    wanted = [qid for qid in members if qid not in {a["question_id"] for a in cached}]
+
+    if wanted and not args.offline:
+        source = StackExchangeSource(site=args.site)
+        try:
+            fetched = source.answers(wanted)
+        except (RuntimeError, QuotaExhausted) as exc:
+            err(f"could not read answers: {exc}")
+            return EXIT_FAILED
+        cached.extend(fetched)
+        _save_answers(path, cached)
+        err(f"fetched {len(fetched)} answers for {len(wanted)} questions; "
+            f"quota left {source.quota_remaining}")
+    elif wanted:
+        err(f"{len(wanted)} questions have no cached answers and --offline is set.")
+
+    relevant = [a for a in cached if a["question_id"] in members]
+    if not relevant:
+        out("no answers held for this group.")
+        return EXIT_OK
+
+    readings = [read_answer(a) for a in relevant]
+    out(f"group {args.number}: {demand.cluster.label}  "
+        f"({len(members)} questions)\n")
+    out(summarise(readings))
+
+    by_question = {}
+    for reading in readings:
+        by_question.setdefault(reading.question_id, []).append(reading)
+    out("\nby question, best-scoring answer first")
+    for qid, item in sorted(members.items(),
+                            key=lambda kv: -kv[1].engagement_score):
+        out(f"\n  {item.title}")
+        out(f"  {item.url}")
+        for reading in sorted(by_question.get(qid, []),
+                              key=lambda r: (not r.is_accepted, -r.score)):
+            out(reading.line())
+            out(f"           {reading.url}")
+    out("\ncontent from Stack Exchange, CC BY-SA; the links are the attribution.")
+    return EXIT_OK
+
+
+def _load_answers(path: Path) -> list:
+    if not path.exists():
+        return []
+    rows = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            rows.append(json.loads(line))
+        except json.JSONDecodeError:
+            continue
+    return rows
+
+
+def _save_answers(path: Path, rows) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    seen, unique = set(), []
+    for row in rows:
+        if row["answer_id"] in seen:
+            continue
+        seen.add(row["answer_id"])
+        unique.append(row)
+    with path.open("w", encoding="utf-8") as handle:
+        for row in unique:
+            handle.write(json.dumps(row, ensure_ascii=False) + "\n")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="mine",
@@ -258,7 +367,9 @@ def build_parser() -> argparse.ArgumentParser:
     read.set_defaults(func=_cmd_harvest)
 
     for name, func, helptext in (("clusters", _cmd_clusters, "group and rank"),
-                                 ("show", _cmd_show, "print one group in full")):
+                                 ("show", _cmd_show, "print one group in full"),
+                                 ("answers", _cmd_answers,
+                                  "read what one group's answers actually say")):
         sub = subparsers.add_parser(name, help=helptext)
         sub.add_argument("--threshold", type=float, default=0.30)
         sub.add_argument("--min-size", type=int, default=4, dest="min_size")
@@ -270,6 +381,9 @@ def build_parser() -> argparse.ArgumentParser:
             sub.add_argument("--json", default="", help="also write the ranking here")
         else:
             sub.add_argument("number", type=int, help="which group, by rank")
+        if name == "answers":
+            sub.add_argument("--offline", action="store_true",
+                             help="use only cached answers, spend no quota")
         sub.set_defaults(func=func)
 
     return parser

@@ -70,12 +70,16 @@ which says only that KiCad exists.
 **42% of everything that grouped is about operating a design tool, not about
 electronics.**
 
-| theme | groups | questions | share | describe manual work | unanswered |
+| theme | groups | questions | share | manual-work words | unanswered\* |
 |---|---:|---:|---:|---:|---:|
 | operating an EDA tool | 78 | 1,176 | 42% | 7% | 14% |
 | choosing or identifying a part | 49 | 764 | 27% | 1% | 15% |
 | circuit design and everything else | 47 | 513 | 18% | 4% | 14% |
 | manufacturing and assembly | 28 | 373 | 13% | 7% | 9% |
+
+\* *Stack Exchange's test: no accepted answer and no answer scoring 1+.
+"Manual-work words" counts questions containing them, and the section below shows
+what that measure gets wrong in a group about physical assembly.*
 
 *The four theme names are mine. The 202 groups are the algorithm's; sorting them
 onto four shelves is a human judgement and someone could reasonably draw the
@@ -119,21 +123,67 @@ BOM my tool gave me is missing the things I need", which is exactly what
 manufacturer part number enrichment addresses. The first question in that list
 is the one that opened this investigation.
 
-**All eight have accepted answers**, and so do all twenty in the pick-and-place
-group below. That is worth stating plainly because the first draft of this
-document said the opposite: it read the vote count in the tool's output as an
-answer count and concluded the group was an unmet need. It is not. These are
-chronic, well-trodden problems that people ask about and get answered.
+All eight are marked answered — but **only five have an accepted answer.**
+Stack Exchange's `is_answered` means "has an accepted answer *or* an answer
+scoring one or more", which is not the same claim and is verified here: three of
+these eight have nothing accepted. Every "unanswered" figure in this document
+uses the site's looser test, not "nobody replied" and not "nothing accepted".
 
-Which leaves the manual-work rate as the real signal, and one honest caveat with
-it: **the answers were not read.** A 50% manual-work rate measures the language
-of the *questions*. Whether the accepted answers resolve the problem or tell
-somebody to write a script is the obvious next check, and it is not answered
-here. Nothing below should be read as "these people got no help".
+## What the answers actually say
 
-Group 23 — pick-and-place data, 20 questions, **30% describe manual work**, all
-answered. Export a centroid file, get the rotations right, work out what a
-machine needs. Same shape of problem, further down the same pipeline.
+Twenty answers to those eight questions were read — all of them, not sampled.
+**Not one points at a feature that solves the problem.**
+
+| question | what the best answer says |
+|---|---|
+| Eagle: custom BOM fields | use the Attribute tool on *each device*, or write a script to do it |
+| Eagle: exclude a part from the BOM | "I haven't seen such an option" — rename parts with a prefix and `grep -v` them out. The answerer adds: *"This is not what you asked for"* |
+| Eagle: multilevel BOM | *accepted* — build an internal part-number system and a relational database |
+| LTspice: real manufacturer part numbers | *accepted* — hand-edit LTspice's component database row by row. Runner-up: "LTspice is practically useless for making boards … you need a different tool flow" |
+| Altium: BOM organisation | the grouping is confused because a value and its description disagree — *"you have a whole different issue"* |
+| Is there a BOM standard? | *accepted, 9 votes* — "I don't think there is a standard … I've written my own part searcher for EAGLE and KiCad" |
+| Can I order parts from a BOM? | *accepted* — yes, vendor import works fine **as long as you have a manufacturer part number in there** |
+
+That last one is the whole business in one sentence. The ordering step is solved;
+the bottleneck is arriving at it with correct part numbers. And the Altium answer
+is a value/description mismatch — precisely the class of defect `helix-bom`
+already detects.
+
+So the group is answered and *not solved*. The answers are workarounds, scripts,
+"write your own", and one "your tool cannot do this". That is what an opening
+looks like when a site has been running for sixteen years: not silence, but a
+decade of people being handed the work back.
+
+## Where this went wrong, and what it cost
+
+Group 23 — pick-and-place data — was recommended in an earlier draft of this
+document as the strongest third-line candidate, on a **30% manual-work rate**.
+Reading the six questions behind that number:
+
+| text | is this work software could remove? |
+|---|---|
+| "manually calculate the center of the part body" | yes |
+| "manually remove the unused components from the pick and place file and BOM" | yes |
+| "the through-hole components could be soldered by hand" | no — soldering |
+| "best practice for manually dealing with such reels" | no — handling parts |
+| "Sparkfun say they do this sort of work by hand" | no — hand assembly |
+| "any better estimate except counting manually?" | no — counting parts |
+
+**Two of six.** The real rate is nearer 10% than 30%. In a group about physical
+assembly, "by hand" mostly means a soldering iron, and the keyword list cannot
+tell that from "I edit this spreadsheet by hand every time". The same check on
+group 40 gives three of four genuine — in a BOM context those words do mean
+software toil.
+
+The same fault ran through the answer classifier, which reported 58% of group
+23's accepted answers as "hands back a scripting job" on hits like "soldered by
+hand". Corrected, it reads 33%.
+
+**Group 23 is therefore downgraded**, and this is left in rather than edited out
+because it is the third time in this investigation that a small measurement got
+reported as a conclusion. The instrument now prints "not a finding — read the
+answers" every time it runs, and `score.py` carries the limitation next to the
+word list that causes it.
 
 ## What this does not say
 
@@ -151,19 +201,25 @@ machine needs. Same shape of problem, further down the same pipeline.
 
 ## What follows
 
-1. **The netlist reader and part-number enrichment are pointed at the right
-   thing.** Confirmed, not assumed — group 40 is that problem, in users' own
-   words, recurring across three different CAD tools over a decade.
-2. **Pick-and-place export is the strongest candidate for the third line.**
-   Adjacent to what exists, and the highest manual-work rate of any large group.
-3. **Read the accepted answers in groups 40 and 23 before committing to
-   either.** Roughly thirty answers. If they resolve the problem cleanly, the
-   opportunity is smaller than the question count suggests; if they say "write
-   a script", it is larger. This is cheap and it is the difference between
-   evidence and a hunch.
-4. **The 24/7 monitor should not be built for this source.** There is nothing to
+1. **Manufacturer part number enrichment is the right next thing**, and this
+   is now evidence rather than assumption. Across eight questions and the twenty
+   answers to them, people using Eagle, Altium and LTspice are told to hand-edit
+   databases, write ULP scripts, or change tools — and the single answer saying
+   ordering works fine names correct part numbers as the precondition.
+2. **Aim at the export gap, not at BOM management.** Octopart, Digi-Key's BOM
+   manager and Arena already own "upload a good BOM, get parts". They all assume
+   the BOM is already correct. Nobody in these twenty answers is served on the
+   step before that, which is where `helix-bom` sits.
+3. **Pick-and-place is not the third line.** Downgraded on inspection: most of
+   its manual-work signal is physical assembly. It stays on the list, no longer
+   at the top of it.
+4. **Do not trust a keyword rate again without reading the text under it.**
+   Three separate wrong conclusions in this investigation came from that, and all
+   three were caught by reading perhaps thirty items. Reading is cheap at this
+   scale; it stops being cheap at the scale where the rates would be reliable.
+5. **The 24/7 monitor should not be built for this source.** There is nothing to
    monitor. Re-run the miner quarterly instead; that is one hour of quota.
-5. **Re-run this against a source with live volume before drawing conclusions
+6. **Re-run this against a source with live volume before drawing conclusions
    about what people need *today*.** The candidate is Reddit, which is blocked on
    a contract — see `sources/base.py`.
 

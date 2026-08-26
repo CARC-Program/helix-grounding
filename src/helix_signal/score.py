@@ -53,6 +53,20 @@ HELP_LANGUAGE = (
     "anyone know", "looking for", "advice", "should i",
 )
 
+# The strongest signal available, and the one with the worst failure mode.
+#
+# "by hand" and "manually" mean two different things depending on what is being
+# discussed, and this list cannot tell them apart. In a group about bills of
+# materials the hits read "whenever I export a BOM I have to manually remove
+# these parts" -- software toil, exactly what is wanted. In a group about
+# pick-and-place machines they read "the through-hole parts could be soldered by
+# hand" and "counting manually" -- people doing physical work, which no program
+# removes. Measured on those two groups: 3 of 4 hits genuine in the first, 2 of 6
+# in the second.
+#
+# So a high manual-work rate is a reason to read the questions, never a finding
+# on its own. `cluster.py` reports it as one part of five with the evidence
+# attached, which is the only honest way to carry a signal this noisy.
 MANUAL_WORK_LANGUAGE = (
     "by hand", "manually", "copy and paste", "copy-paste", "spreadsheet",
     "one by one", "tedious", "hours", "every time", "repetitive", "script to",
@@ -147,13 +161,21 @@ def _rule_manual_work(item, text) -> Contribution:
 def _rule_unanswered(item, text) -> Contribution:
     """An answered question is a closed door. An open one is where help is
     still worth something, which is the opposite of how a sales funnel would
-    weight it."""
+    weight it.
+
+    Careful with the field this reads. Stack Exchange's ``is_answered`` does not
+    mean "has an accepted answer" -- it means "has an accepted answer **or** an
+    answer scoring one or more". Verified against eight questions that all
+    reported answered while only five had anything accepted. The wording below
+    says so, because calling it "accepted" made a document draw the wrong
+    conclusion once already.
+    """
     if not item.is_answered and item.answer_count == 0:
         return Contribution("still unanswered", 15, 15, "no answers yet")
     if not item.is_answered:
         return Contribution("still unanswered", 8, 15,
-                            f"{item.answer_count} answer(s), none accepted")
-    return Contribution("still unanswered", 0, 15, "already answered")
+                            f"{item.answer_count} answer(s), none accepted or upvoted")
+    return Contribution("still unanswered", 0, 15, "accepted or upvoted answer")
 
 
 def _rule_recency(item, text) -> Contribution:

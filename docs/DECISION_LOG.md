@@ -1680,3 +1680,53 @@ back.
 is something to monitor. The candidate source with live volume is Reddit, which
 is blocked on a contract nobody here can sign — recorded as data in
 `sources/base.py` rather than as a comment somebody has to remember.
+
+## D-049 — Read the answers, not just the questions
+
+**Decision:** add `mine.py answers`, and treat "answered" as a question to
+investigate rather than a fact to report.
+
+**Why:** D-048's write-up called a group of BOM questions an unmet need. All
+eight were marked answered, so the claim was withdrawn. Then the answers were
+read, and the picture inverted again: not one of the twenty points at a feature
+that solves the problem. They say write a ULP script, hand-edit the component
+database row by row, build an internal part-number system, rename your parts and
+`grep -v` them out — one answerer writes "this is not what you asked for". The
+group is answered and not solved, and those are different claims that no
+question-level field distinguishes.
+
+**Three measurement faults found, all the same fault.**
+
+`is_answered` does not mean "has an accepted answer". Stack Exchange sets it
+when a question has an accepted answer *or* an answer scoring one or more. Of
+the eight, five had anything accepted. The field name was read as its definition
+and never checked, and two documents were written on it.
+
+"By hand" and "manually" mean writing code in one context and holding a
+soldering iron in another. In the pick-and-place group, four of six manual-work
+hits were people soldering, handling reels and counting parts — work no program
+removes. That group had been recommended as the next product line on the
+strength of a 30% rate that is nearer 10%. It is downgraded.
+
+The same words sat in the answer classifier's "hands back a scripting job"
+bucket, where they had no business being: hand-soldering is not code. Removing
+them took that group from 58% to 33%.
+
+**What survived.** Group 40 held up under the same scrutiny — three of its four
+manual-work hits are genuine software toil, its answers really are workarounds,
+and the accepted answer to "can I order from a BOM?" says vendor import works
+fine *as long as the manufacturer part numbers are already in there*. That names
+the bottleneck as the step before the one the market already serves, which is
+where this project's tool sits. Manufacturer part number enrichment is now
+evidenced rather than assumed.
+
+**Cost impact:** two API requests. The answers are cached beside the corpus and
+`--offline` refuses to spend anything.
+
+**Future implications:** the rule this project keeps relearning is that a rate
+computed over a few dozen items is an index and not a finding. Reading thirty
+items caught three wrong conclusions here and cost minutes. `summarise()` now
+prints "not a finding — read the answers" on every run, and `score.py` carries
+the limitation in a comment beside the word list that causes it, because the
+next person to use that list will be in a different domain where "by hand" means
+something else again.

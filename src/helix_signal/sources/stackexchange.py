@@ -196,6 +196,49 @@ class StackExchangeSource(OpportunitySource):
         return [{"name": t.get("name", ""), "count": int(t.get("count", 0))}
                 for t in payload.get("items", [])]
 
+    def answers(self, question_ids, limit: int = 100, max_pages: int = 5) -> list:
+        """Every answer to the given questions, newest-scoring first.
+
+        The reason this exists: a group of questions that all have accepted
+        answers is not automatically a solved problem. "Answered" and "solved"
+        are different claims, and the difference is whether the accepted answer
+        hands somebody a feature or hands them a scripting job. That cannot be
+        read off the question metadata, so the answers have to be fetched.
+
+        No author is kept here either, for the same reason as everywhere else:
+        the question being asked is what the answer says, not who said it.
+        """
+        ids = [str(qid) for qid in question_ids]
+        if not ids:
+            return []
+        collected = []
+        for start in range(0, len(ids), 100):   # the API takes 100 ids at a time
+            batch = ";".join(ids[start:start + 100])
+            for page in range(1, max_pages + 1):
+                payload = self._get(f"questions/{batch}/answers", {
+                    "pagesize": min(max(limit, 1), 100),
+                    "page": page,
+                    "order": "desc",
+                    "sort": "votes",
+                    "filter": "withbody",
+                })
+                for item in payload.get("items", []):
+                    collected.append({
+                        "answer_id": str(item.get("answer_id", "")),
+                        "question_id": str(item.get("question_id", "")),
+                        "body": html_to_text(item.get("body", "")),
+                        "score": int(item.get("score", 0)),
+                        "is_accepted": bool(item.get("is_accepted", False)),
+                        "created_at": datetime.fromtimestamp(
+                            item.get("creation_date", 0), tz=timezone.utc).isoformat(),
+                        "content_license": item.get("content_license", ""),
+                        "url": f"https://{self.site}.stackexchange.com/a/"
+                               f"{item.get('answer_id', '')}",
+                    })
+                if not self.has_more:
+                    break
+        return collected
+
     def _normalise(self, item: dict) -> SourceItem:
         return SourceItem(
             source=self.capabilities.key,

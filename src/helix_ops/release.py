@@ -269,6 +269,90 @@ def check_wheel_excludes_internal(root: Path) -> Check:
     return Check("wheel contents", True, "internal packages excluded")
 
 
+def check_history_names(root: Path | None = None, max_bytes: int = 80_000_000) -> Check:
+    """Scan every object in git history for an identifying name.
+
+    The third place the gate did not look. `check_no_personal_details` reads the
+    working tree, `check_built_artifacts` reads what would be uploaded, and
+    until this existed nothing read *history* — where a name survives long after
+    it is deleted from HEAD, and where the fix costs a rewrite and a
+    force-push instead of an edit.
+
+    That is not hypothetical. A name sat in nine blob versions of this very
+    file, in a public repository, while the tree scan reported clean because
+    this file is on its own exemption list. Removing it took a `filter-repo`
+    run, a force-push, and a repository deletion, because GitHub keeps
+    unreachable objects fetchable by SHA.
+
+    Also catches what the rewrite itself nearly missed: a stale branch keeping
+    an old root alive. `refs/heads/master` was still pointing at a commit
+    authored from a personal email address, three rewrites after that address
+    was supposed to be gone.
+
+    Scans blobs, commit messages, author and committer identities, and tag
+    taggers. Bounded by ``max_bytes``; if the bound is hit the check fails
+    rather than reporting a clean partial scan.
+    """
+    root = root or REPO_ROOT
+    names, terms = _identity_pattern()
+    if not terms:
+        return Check("history clean", False,
+                     f"no identity list at {IDENTITY_FILE.name} -- cannot scan history")
+
+    def git(args, binary=False):
+        return subprocess.run(["git", *args], cwd=root, capture_output=True,
+                              text=not binary, errors="replace" if not binary else None,
+                              timeout=300)
+
+    # Identities and messages, across every ref.
+    try:
+        log = git(["log", "--all", "--format=%H%x00%an%x00%ae%x00%cn%x00%ce%x00%B%x00END"])
+        refs = git(["for-each-ref", "--format=%(refname)%00%(taggername)%00%(taggeremail)"])
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return Check("history clean", False, f"could not read history ({exc})")
+    if log.returncode != 0:
+        return Check("history clean", False, "git log failed")
+
+    hits = []
+    for entry in log.stdout.split("\x00END"):
+        parts = entry.strip("\n").split("\x00")
+        if len(parts) < 6:
+            continue
+        for value in parts[1:6]:
+            if names.search(value or ""):
+                hits.append(f"commit {parts[0][:9]}")
+                break
+    for line in refs.stdout.splitlines():
+        if names.search(line):
+            hits.append(f"ref {line.split(chr(0))[0]}")
+
+    # Every object ever stored, streamed in one pass.
+    try:
+        blobs = subprocess.run(
+            ["git", "cat-file", "--batch-all-objects", "--batch", "--buffer"],
+            cwd=root, capture_output=True, timeout=300)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return Check("history clean", False, f"could not read objects ({exc})")
+
+    raw = blobs.stdout
+    if len(raw) > max_bytes:
+        return Check("history clean", False,
+                     f"history is larger than the {max_bytes // 1_000_000}MB scan "
+                     f"bound -- raise max_bytes rather than trusting a partial scan")
+    text = raw.decode("utf-8", errors="replace")
+    scanned = text.count("\n")
+    for match in names.finditer(text):
+        hits.append(f"object content at offset {match.start()}")
+        break       # one is enough; the rewrite is the same either way
+
+    if hits:
+        return Check("history clean", False,
+                     f"{len(hits)} place(s) in history name somebody: "
+                     f"{', '.join(hits[:3])} -- this needs a rewrite, not an edit")
+    return Check("history clean", True,
+                 f"{scanned} line(s) of history scanned, nobody named")
+
+
 def check_built_artifacts(root: Path | None = None) -> Check:
     """Scan what would actually be uploaded, not what is in the tree.
 
@@ -366,6 +450,7 @@ def run_all(root: Path | None = None, measured: int | None = None) -> list:
         Check("CHANGELOG entry", False, "version unknown, cannot check"),
         check_no_personal_details(root),
         check_exempt_files_name_nobody(root),
+        check_history_names(root),
         check_wheel_excludes_internal(root),
         check_built_artifacts(root),
         check_working_tree(root),

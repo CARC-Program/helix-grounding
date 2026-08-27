@@ -1853,3 +1853,54 @@ sits in three commits of a public repository and has since it was made public.
 Removing it from `HEAD` stops it spreading; removing it from history needs
 another rewrite and probably another delete-and-recreate, and GH Archive may
 hold copies regardless. That is the operator's call to make, not this log's.
+
+## D-052 — The history rewrite, and the check that should have made it unnecessary
+
+**What was done.** `git filter-repo` over a fresh clone of the public repository,
+replacing the name-bearing line in nine blob versions of `src/helix_ops/release.py`
+and mapping one personal email address onto the noreply one. Verified across 381
+objects: zero occurrences in file contents, commit messages, author and committer
+identities, or tag taggers. The HEAD tree came out byte-for-byte identical to the
+released one, so the rewrite touched history and nothing else. Force-pushed, tags
+included.
+
+**Two things the rewrite turned up that the scan had not.**
+
+`refs/heads/master` was still alive locally, pointing at an orphan root commit
+authored from a personal address — a leftover from the *previous* rewrite,
+which had renamed the branch and never deleted the old one. It had never been
+pushed, so it was local-only, but it is exactly how a supposedly-scrubbed name
+survives: not in the tree, not on the remote, sitting on a branch nobody looks
+at. Deleted, reflogs expired, repacked.
+
+The tag `v0.1.1` still resolves to a pre-rewrite commit SHA, which looked alarming
+and is correct: the name entered `release.py` after 0.1.1, so commits before that
+point were unchanged and kept their identifiers. Worth writing down because it
+will look wrong again to whoever checks next.
+
+**A force-push is not a deletion.** GitHub keeps unreachable objects and serves
+them by SHA. The old blob was fetched back through the API after the push, name
+intact. Deleting and recreating the repository is the reliable remedy; that step
+is outstanding and needs a permission this session does not hold.
+
+**The check that follows from it.** The gate read the working tree, then the
+exempted files, then the built artifacts — and never read history, which is
+where a name survives long after it is deleted from HEAD and where the fix costs
+a rewrite instead of an edit. `check_history_names` scans every object, every
+commit message, every author and committer identity and every tag tagger, across
+all refs. It runs in 0.2 seconds on this repository. It would have failed the
+day the name was committed, which is eleven days before the repository was made
+public.
+
+Six tests, each a way this actually goes wrong: a name deleted from HEAD but
+alive in history; a name in a commit message; a name in an author identity; a
+stale branch keeping an orphan root alive; a history too large to scan, which
+fails rather than reporting a clean partial result; and the real repository,
+which passes now and would not have yesterday.
+
+**Cost impact:** 0.2 seconds per release check.
+
+**Future implications:** the gate now looks in four places — tree, exemptions,
+history, artifacts. That list is the honest shape of the question "could this
+reach a stranger", and each entry was added after something got through the
+previous three.

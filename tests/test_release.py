@@ -311,3 +311,106 @@ def test_this_repository_currently_ships_clean_artifacts():
         pytest.skip("no private/identity.txt on this machine")
     check = check_built_artifacts(REPO_ROOT)
     assert check.ok, check.line()
+
+
+# --------------------------------------------------------------------
+# History
+# --------------------------------------------------------------------
+
+def _repo(tmp_path, canary_in=None, author=None):
+    """A tiny git repository, optionally with a name planted somewhere."""
+    env = ["-c", "user.name=Test", "-c", f"user.email={author or 'test@example.com'}"]
+    subprocess.run(["git", "init", "-q", "-b", "main"], cwd=tmp_path, check=True)
+    (tmp_path / "a.txt").write_text(canary_in or "nothing here\n", encoding="utf-8")
+    subprocess.run(["git", *env, "add", "-A"], cwd=tmp_path, check=True)
+    subprocess.run(["git", *env, "commit", "-q", "-m", "first"], cwd=tmp_path, check=True)
+    return tmp_path
+
+
+def test_a_name_deleted_from_head_is_still_found_in_history(tmp_path):
+    """The whole reason this check exists. A name removed from the working tree
+    is still in every clone, and the tree scan reports clean while it sits
+    there. Removing it costs a rewrite and a force-push, not an edit."""
+    from helix_ops.release import check_history_names
+    planted = _canary()
+    repo = _repo(tmp_path, canary_in=f"contact {planted}\n")
+
+    # delete it from HEAD, exactly as the real fix did
+    (repo / "a.txt").write_text("nothing here\n", encoding="utf-8")
+    subprocess.run(["git", "-c", "user.name=T", "-c", "user.email=t@e.com",
+                    "commit", "-qam", "remove it"], cwd=repo, check=True)
+
+    assert check_no_personal_details(repo).ok, "the tree scan sees nothing wrong"
+    check = check_history_names(repo)
+    assert not check.ok
+    assert "rewrite" in check.detail
+
+
+def test_a_name_in_a_commit_message_is_found(tmp_path):
+    from helix_ops.release import check_history_names
+    repo = _repo(tmp_path)
+    (repo / "b.txt").write_text("x\n", encoding="utf-8")
+    subprocess.run(["git", "-c", "user.name=T", "-c", "user.email=t@e.com",
+                    "add", "-A"], cwd=repo, check=True)
+    subprocess.run(["git", "-c", "user.name=T", "-c", "user.email=t@e.com",
+                    "commit", "-q", "-m", f"thanks to {_canary()}"], cwd=repo, check=True)
+    assert not check_history_names(repo).ok
+
+
+def test_a_name_in_an_author_identity_is_found(tmp_path):
+    """Two commits went out under a personal address before anyone noticed."""
+    from helix_ops.release import check_history_names
+    repo = _repo(tmp_path, author=f"{_canary()}@example.com")
+    assert not check_history_names(repo).ok
+
+
+def test_a_stale_branch_keeping_an_old_root_alive_is_found(tmp_path):
+    """What the real rewrite nearly missed. `refs/heads/master` was still
+    pointing at a commit authored from a personal address, three rewrites after
+    that address was supposed to be gone. `--all` is why this catches it."""
+    from helix_ops.release import check_history_names
+    repo = _repo(tmp_path)
+    subprocess.run(["git", "checkout", "-q", "--orphan", "old"], cwd=repo, check=True)
+    (repo / "c.txt").write_text(f"{_canary()}\n", encoding="utf-8")
+    subprocess.run(["git", "-c", "user.name=T", "-c", "user.email=t@e.com",
+                    "add", "-A"], cwd=repo, check=True)
+    subprocess.run(["git", "-c", "user.name=T", "-c", "user.email=t@e.com",
+                    "commit", "-q", "-m", "orphan"], cwd=repo, check=True)
+    subprocess.run(["git", "checkout", "-q", "main"], cwd=repo, check=True)
+
+    assert check_no_personal_details(repo).ok, "the orphan is not in the tree"
+    assert not check_history_names(repo).ok, "but it is in history"
+
+
+def test_a_clean_history_passes(tmp_path):
+    from helix_ops.release import check_history_names
+    check = check_history_names(_repo(tmp_path))
+    assert check.ok
+    assert "nobody named" in check.detail
+
+
+def test_a_missing_identity_list_fails_the_history_scan(tmp_path):
+    from helix_ops.release import check_history_names
+    original = release.IDENTITY_FILE
+    release.IDENTITY_FILE = Path("does-not-exist.txt")
+    try:
+        assert not check_history_names(_repo(tmp_path)).ok
+    finally:
+        release.IDENTITY_FILE = original
+
+
+def test_a_history_too_large_to_scan_fails_rather_than_reporting_clean(tmp_path):
+    """A partial scan reporting a pass is the failure this module is about."""
+    from helix_ops.release import check_history_names
+    check = check_history_names(_repo(tmp_path), max_bytes=10)
+    assert not check.ok
+    assert "bound" in check.detail
+
+
+def test_this_repository_has_a_clean_history():
+    """The real one. It did not pass before the rewrite."""
+    from helix_ops.release import check_history_names
+    if not release.IDENTITY_FILE.exists():
+        pytest.skip("no private/identity.txt on this machine")
+    check = check_history_names(REPO_ROOT)
+    assert check.ok, check.line()

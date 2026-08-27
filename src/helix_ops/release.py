@@ -32,16 +32,68 @@ from pathlib import Path
 
 from .facts import REPO_ROOT, measure_tests
 
-# The same pattern used to scrub the history. Kept here rather than in a shell
-# script so it runs as part of the release gate, and deliberately without any
-# path exclusions -- the last version of this detector excluded the folder that
-# held the problem and reported clean.
-PERSONAL_PATTERNS = re.compile(
-    r"NAME-REMOVED-FROM-HISTORY"
-    r"|legal guardian|\bguardians?\b|\bminors?\b|\bunder 18\b"
-    r"|allows 13\+|age 13|16-year|\bteenager\b",
-    re.IGNORECASE,
+# The detector, split in two, because the first version of it published the
+# thing it was built to hide.
+#
+# It used to hold the operator's real name as a regex literal, right here. That
+# made this file a file naming a real person -- in a public repository, and in
+# every published sdist, because the sdist ships `src/` whole while the wheel
+# does not. The detector reported clean throughout, because this file is on its
+# own exemption list. A whole history rewrite had been done to remove those
+# names, and the tool doing the checking was carrying them.
+#
+# So the identifying half now lives outside the repository, and the generic
+# half stays here. The generic words name no one: they are worth catching
+# because they describe a situation, not a person.
+IDENTITY_FILE = Path(__file__).resolve().parent.parent.parent / "private" / "identity.txt"
+
+GENERIC_PATTERNS = (
+    r"legal guardian", r"\bguardians?\b", r"\bminors?\b", r"\bunder 18\b",
+    r"allows 13\+", r"age 13", r"16-year", r"\bteenager\b",
 )
+
+
+def _identity_pattern(identity_file=None):
+    """Just the names, compiled. Returns ``(pattern, count)``.
+
+    ``count`` of zero means the list was not found, and every caller treats
+    that as a failure rather than a pass -- a name scanner with no names is a
+    check that cannot run.
+    """
+    path = Path(identity_file) if identity_file else IDENTITY_FILE
+    names = []
+    if path.exists():
+        for line in path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if line and not line.startswith("#"):
+                names.append(re.escape(line))
+    if not names:
+        return re.compile(r"(?!x)x"), 0     # matches nothing
+    return re.compile("|".join(names), re.IGNORECASE), len(names)
+
+
+def load_personal_patterns(identity_file=None):
+    """The full detector: generic terms, plus names read from outside the repo.
+
+    Returns ``(pattern, sources_found)``. When the identity file is absent the
+    check still runs on the generic half and ``sources_found`` is 0 -- and the
+    caller says so out loud, because a detector running at half strength while
+    reporting a pass is the failure this whole module exists to prevent.
+    """
+    path = Path(identity_file) if identity_file else IDENTITY_FILE
+    terms = list(GENERIC_PATTERNS)
+    found = 0
+    if path.exists():
+        for line in path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            terms.append(re.escape(line))
+            found += 1
+    return re.compile("|".join(terms), re.IGNORECASE), found
+
+
+PERSONAL_PATTERNS, _IDENTITY_TERMS = load_personal_patterns()
 
 # Files that necessarily contain the words, because their job is to describe or
 # to test for them. `release.py` holds the pattern; `test_release.py` plants a
@@ -129,6 +181,38 @@ def check_changelog(root: Path, version: str) -> Check:
     return Check("CHANGELOG entry", False, f"no section for {version}")
 
 
+def check_exempt_files_name_nobody(root: Path) -> Check:
+    """The exempted files must contain the generic words and never a name.
+
+    This is the check that would have stopped a real name going to PyPI. Two
+    files are exempt from the detector because their job is to hold and to test
+    the words -- and an exemption is a place the gate stops looking, so the
+    thing that actually matters gets looked for here instead. The names are read
+    from outside the repository; if that file is missing this check cannot run,
+    and at release time a check that cannot run is a failure.
+    """
+    names, terms = _identity_pattern()
+    if not terms:
+        return Check("exempt files clean", False,
+                     f"no identity list at {IDENTITY_FILE.name} -- cannot verify "
+                     f"the exempt files name nobody")
+
+    hits = []
+    for rel in sorted(DETECTOR_EXEMPT):
+        path = root / rel
+        if not path.exists():
+            continue
+        for number, line in enumerate(
+                path.read_text(encoding="utf-8").splitlines(), 1):
+            if names.search(line):
+                hits.append(f"{rel}:{number}")
+    if hits:
+        return Check("exempt files clean", False,
+                     f"a real name sits in an exempted file: {', '.join(hits[:3])}")
+    return Check("exempt files clean", True,
+                 f"{len(DETECTOR_EXEMPT)} exempt file(s) name nobody")
+
+
 def check_no_personal_details(root: Path) -> Check:
     """Run the detector over every tracked file, with no exclusions."""
     try:
@@ -185,6 +269,87 @@ def check_wheel_excludes_internal(root: Path) -> Check:
     return Check("wheel contents", True, "internal packages excluded")
 
 
+def check_built_artifacts(root: Path | None = None) -> Check:
+    """Scan what would actually be uploaded, not what is in the tree.
+
+    Every other check here reads the working tree, and the working tree is not
+    what gets published. The wheel excludes the internal packages; the sdist
+    ships ``src/`` and ``tests/`` whole, so it carried `helix_ops` and
+    `helix_signal` and — until this was found — a real name inside one of them.
+
+    A blind spot in exactly the place the gate exists to guard. This opens the
+    files that would go to PyPI and reads them.
+    """
+    root = root or REPO_ROOT
+    dist = root / "dist"
+    if not dist.exists():
+        return Check("built artifacts", True, "nothing built yet, nothing to check")
+
+    # Names only, not the generic terms. The invariant that must hold for
+    # anything published is "this names nobody"; the generic words are a
+    # working-tree concern where DETECTOR_EXEMPT applies, and scanning for them
+    # here would fail on the very test fixture that proves the detector works.
+    pattern, terms = _identity_pattern()
+    artifacts = sorted(list(dist.glob("*.whl")) + list(dist.glob("*.tar.gz")))
+    if not artifacts:
+        return Check("built artifacts", True, "dist/ is empty")
+    if not terms:
+        return Check("built artifacts", False,
+                     f"no identity list at {IDENTITY_FILE.name} -- cannot scan "
+                     f"what would be uploaded")
+
+    hits, internal = [], set()
+    for artifact in artifacts:
+        for name, text in _artifact_files(artifact):
+            leaf = name.split("/", 1)[-1] if artifact.suffix == ".gz" else name
+            for package in ("helix_ops", "helix_api", "helix_signal"):
+                if f"{package}/" in leaf and artifact.suffix != ".gz":
+                    internal.add(f"{package} in {artifact.name}")
+            if text is None:
+                continue
+            for number, line in enumerate(text.splitlines(), 1):
+                if pattern.search(line):
+                    hits.append(f"{artifact.name}:{leaf}:{number}")
+    if hits:
+        return Check("built artifacts", False,
+                     f"{len(hits)} personal-detail hit(s) in what would be "
+                     f"uploaded: {', '.join(hits[:3])}")
+    if internal:
+        return Check("built artifacts", False,
+                     f"internal package(s) would ship: {', '.join(sorted(internal))}")
+    return Check("built artifacts", True,
+                 f"{len(artifacts)} artifact(s) scanned, no names, no internals")
+
+
+def _artifact_files(path: Path):
+    """Yield ``(name, text_or_None)`` for every file inside a wheel or sdist."""
+    import tarfile
+    import zipfile
+
+    readable = (".py", ".md", ".txt", ".toml", ".cfg", ".csv", ".json", ".net")
+    if path.suffix == ".whl":
+        with zipfile.ZipFile(path) as archive:
+            for name in archive.namelist():
+                yield name, (_decode(archive.read(name))
+                             if name.endswith(readable) else None)
+    else:
+        with tarfile.open(path) as archive:
+            for member in archive.getmembers():
+                if not member.isfile():
+                    continue
+                handle = archive.extractfile(member)
+                yield member.name, (_decode(handle.read())
+                                    if handle and member.name.endswith(readable)
+                                    else None)
+
+
+def _decode(raw: bytes):
+    try:
+        return raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return None
+
+
 def run_all(root: Path | None = None, measured: int | None = None) -> list:
     """Every check. ``measured`` is the real pass count; if None the suite runs."""
     root = root or REPO_ROOT
@@ -200,6 +365,8 @@ def run_all(root: Path | None = None, measured: int | None = None) -> list:
         check_changelog(root, version) if version else
         Check("CHANGELOG entry", False, "version unknown, cannot check"),
         check_no_personal_details(root),
+        check_exempt_files_name_nobody(root),
         check_wheel_excludes_internal(root),
+        check_built_artifacts(root),
         check_working_tree(root),
     ]

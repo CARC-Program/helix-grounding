@@ -74,7 +74,14 @@ packages = [
 ]
 
 [tool.hatch.build.targets.sdist]
+# The wheel excludes the internal packages and, until 0.2.0, the sdist did not:
+# it shipped `src/` whole, so helix_ops and helix_signal went to PyPI in every
+# release. One of those files carried a real name as a regex literal, put there
+# by the detector that was supposed to find such things and exempted from its
+# own scan. `helix-ops release-check` now reads the built artifacts rather than
+# the working tree, because the tree is not what gets published.
 include = ["src/", "tests/", "docs/", "scripts/", "README.md", "CHANGELOG.md", "LICENSE", "pyproject.toml"]
+exclude = ["src/helix_ops/", "src/helix_api/", "src/helix_signal/", "tests/sandbox/"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

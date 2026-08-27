@@ -148,13 +148,36 @@ def test_every_internal_package_is_named_in_the_wheel_check():
 # The detector
 # --------------------------------------------------------------------
 
+def _canary() -> str:
+    """A real term from the real list, read at runtime.
+
+    This used to be one of the detector's own terms, written into this file as
+    a literal. That put a suggestive phrase into a public repository and into
+    every published sdist -- a privacy detector whose test fixture leaked the
+    kind of thing it exists to catch. Naming it again here, even to explain the
+    fix, would put it straight back; the artifact scan caught that too. The term
+    now comes from the gitignored identity list, so the detector is still proven
+    against something it really matches and this file names nothing.
+
+    Skipped rather than weakened when the list is absent, which is the case for
+    anyone running these tests from the sdist.
+    """
+    if not release.IDENTITY_FILE.exists():
+        pytest.skip("no private/identity.txt -- nothing to plant")
+    for line in release.IDENTITY_FILE.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if line and not line.startswith("#"):
+            return line
+    pytest.skip("private/identity.txt holds no terms")
+
+
 def test_the_detector_finds_a_planted_name(tmp_path):
     """Proven by planting one, because the previous detector excluded the
     folder that held the problem and reported clean. A detector nobody has
     watched catch something is decoration."""
     subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
     (tmp_path / "notes.md").write_text(
-        "the account owner is fine\nbut a legal guardian is not\n", encoding="utf-8")
+        f"the account owner is fine\nbut {_canary()} is not\n", encoding="utf-8")
     subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
 
     check = check_no_personal_details(tmp_path)
@@ -175,7 +198,7 @@ def test_the_detector_covers_untracked_free_but_not_ignored_files(tmp_path):
     a stranger."""
     subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
     (tmp_path / "private").mkdir()
-    (tmp_path / "private" / "notes.md").write_text("a legal guardian\n", encoding="utf-8")
+    (tmp_path / "private" / "notes.md").write_text(_canary() + "\n", encoding="utf-8")
     (tmp_path / ".gitignore").write_text("private/\n", encoding="utf-8")
     subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
     assert check_no_personal_details(tmp_path).ok
@@ -198,3 +221,93 @@ def test_the_exemption_list_stays_tiny():
         "src/helix_ops/release.py",
         "tests/test_release.py",
     }
+
+
+def test_the_names_are_not_in_the_repository_at_all():
+    """The check that would have stopped a real name reaching PyPI.
+
+    `release.py` used to carry the operator's name as a regex literal. It is on
+    its own exemption list, so the detector reported clean while that file sat
+    in a public repository and in every published sdist -- the tool doing the
+    checking was carrying the thing a whole history rewrite had removed.
+
+    The names live outside the repository now. This asserts that no tracked
+    file contains one, exemptions included.
+    """
+    names, count = release._identity_pattern()
+    if not count:
+        pytest.skip("no private/identity.txt on this machine")
+    listed = subprocess.run(["git", "ls-files"], cwd=REPO_ROOT,
+                            capture_output=True, text=True, check=True)
+    for rel in listed.stdout.split("\n"):
+        rel = rel.strip()
+        if not rel:
+            continue
+        try:
+            text = (REPO_ROOT / rel).read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        assert not names.search(text), f"a real name is in {rel}"
+
+
+def test_the_identity_list_is_never_committed():
+    """It holds the names. Committing it would undo the entire point."""
+    listed = subprocess.run(["git", "ls-files"], cwd=REPO_ROOT,
+                            capture_output=True, text=True, check=True)
+    assert "private/identity.txt" not in listed.stdout
+
+
+def test_a_missing_identity_list_fails_rather_than_passes():
+    """A name scanner with no names finds nothing and would report clean. At
+    release time that is a failure, not a pass."""
+    from helix_ops.release import check_exempt_files_name_nobody
+    original = release.IDENTITY_FILE
+    release.IDENTITY_FILE = Path("does-not-exist.txt")
+    try:
+        assert not check_exempt_files_name_nobody(REPO_ROOT).ok
+    finally:
+        release.IDENTITY_FILE = original
+
+
+def test_the_artifact_scan_reads_what_would_be_uploaded(tmp_path):
+    """Every other check reads the working tree, and the tree is not what gets
+    published. The sdist shipped `src/` whole -- so it carried helix_ops, and a
+    real name inside it -- while the wheel excluded them and the gate looked
+    only at the wheel's package list. This opens the files themselves."""
+    from helix_ops.release import check_built_artifacts
+    import zipfile
+
+    names, count = release._identity_pattern()
+    if not count:
+        pytest.skip("no private/identity.txt on this machine")
+    planted = _canary()
+
+    (tmp_path / "dist").mkdir()
+    with zipfile.ZipFile(tmp_path / "dist" / "fake-1.0-py3-none-any.whl", "w") as w:
+        w.writestr("pkg/__init__.py", f"# contact {planted}\n")
+    check = check_built_artifacts(tmp_path)
+    assert not check.ok
+    assert "personal-detail hit" in check.detail
+
+
+def test_the_artifact_scan_catches_an_internal_package_in_the_wheel(tmp_path):
+    from helix_ops.release import check_built_artifacts
+    import zipfile
+
+    if not release.IDENTITY_FILE.exists():
+        pytest.skip("no private/identity.txt on this machine")
+    (tmp_path / "dist").mkdir()
+    with zipfile.ZipFile(tmp_path / "dist" / "fake-1.0-py3-none-any.whl", "w") as w:
+        w.writestr("helix_ops/cli.py", "# a launch tracker\n")
+    check = check_built_artifacts(tmp_path)
+    assert not check.ok
+    assert "helix_ops" in check.detail
+
+
+def test_this_repository_currently_ships_clean_artifacts():
+    """The real one, over whatever is in dist/."""
+    from helix_ops.release import check_built_artifacts
+    if not release.IDENTITY_FILE.exists():
+        pytest.skip("no private/identity.txt on this machine")
+    check = check_built_artifacts(REPO_ROOT)
+    assert check.ok, check.line()

@@ -1795,3 +1795,61 @@ Octopart are additions rather than rewrites. Nothing in the layer can spend
 money — there is no ordering method and the base class has none to override —
 and that should stay true: this answers questions about parts, and buying them
 is a person's decision made on a distributor's own site.
+
+## D-051 — The detector was publishing the names it was built to hide
+
+**Decision:** move the identifying half of the personal-details pattern out of
+the repository, exclude the internal packages from the sdist, and add two gate
+checks — one that reads the exempted files for names, one that reads the built
+artifacts rather than the working tree.
+
+**What happened.** With `helix-bom enrich` finished and the release gate at 7/7,
+the last step before uploading 0.2.0 to PyPI was to inspect the artifacts. The
+sdist contained `src/helix_ops/release.py`, and line 40 of that file was the
+operator's full legal name, written as a regex literal.
+
+It had been there since the detector was written. It is in the public GitHub
+repository. It would have gone to PyPI, where a version cannot be withdrawn and
+mirrors copy within hours.
+
+**Why nothing caught it.** Three failures compounding, each individually
+reasonable.
+
+The detector exempts `release.py`, because a file holding a pattern of forbidden
+words necessarily contains them. True, and the exemption was argued for at the
+time — but an exemption is a place the gate stops looking, and what it stopped
+looking at was the one file guaranteed to contain a name.
+
+The wheel excludes the internal packages and the sdist did not. `packages` and
+`include` are different lists in different sections, and only the first had ever
+been thought about. The gate's "wheel contents" check reads the `packages` line
+in `pyproject.toml` — a string, not an archive — so it could not have noticed.
+
+Every check in the gate reads the working tree. The working tree is not what
+gets published.
+
+This is the same shape as the detector that excluded the folder holding the
+problem, and as the grounding check that verified zero claims and reported a
+pass. A check with a blind spot built into it, reporting clean.
+
+**The fix.** Names live in `private/identity.txt`, which is gitignored; the
+generic terms, which name nobody, stay in the source. `check_exempt_files_name_nobody`
+reads the exempted files for names, so the exemption no longer covers the thing
+that matters. `check_built_artifacts` opens the wheel and the sdist and reads the
+files that would actually be uploaded. A missing identity list fails both checks
+rather than passing them, because a name scanner with no names finds nothing.
+
+The test fixtures were leaking too, in a smaller way: they planted a real term
+from the pattern as a literal, so that term shipped in every sdist. They now read
+a canary from the gitignored list and skip when it is absent. Writing the
+docstring that explains this reintroduced the phrase, and the new artifact scan
+caught that on the next build.
+
+**Cost impact:** none. Two checks, one gitignored file, and an sdist about a
+quarter smaller.
+
+**What is still outstanding, and is not this repository's decision.** The name
+sits in three commits of a public repository and has since it was made public.
+Removing it from `HEAD` stops it spreading; removing it from history needs
+another rewrite and probably another delete-and-recreate, and GH Archive may
+hold copies regardless. That is the operator's call to make, not this log's.

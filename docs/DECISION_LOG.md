@@ -1880,8 +1880,20 @@ will look wrong again to whoever checks next.
 
 **A force-push is not a deletion.** GitHub keeps unreachable objects and serves
 them by SHA. The old blob was fetched back through the API after the push, name
-intact. Deleting and recreating the repository is the reliable remedy; that step
-is outstanding and needs a permission this session does not hold.
+intact. Deleting and recreating the repository is the reliable remedy.
+
+**Resolved.** The repository was deleted through the web interface — the CLI
+token has `repo` but not `delete_repo`, and an interactive scope refresh kept
+timing out, while the web route needed no new permission at all. Recreated and
+repushed from the working repository rather than from the rewrite clone, which
+had gone two commits stale and would have restored old history; the restore
+script re-runs the history scan before it pushes anything, for that reason.
+
+Verified afterwards against a fresh clone of the public repository: 389 objects,
+zero occurrences, one identity, and the pre-rewrite blob and commits now return
+404 by SHA. One blob that still resolves is a current version of this file that
+names nobody — checked rather than assumed, because "an object is still served"
+and "the name is still there" are different claims.
 
 **The check that follows from it.** The gate read the working tree, then the
 exempted files, then the built artifacts — and never read history, which is

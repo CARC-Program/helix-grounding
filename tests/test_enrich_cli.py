@@ -96,7 +96,7 @@ def test_json_output_is_the_whole_of_stdout(capsys):
     payload = json.loads(capsys.readouterr().out)
     assert payload["offline_data_used"] is True
     assert payload["complete"] is False
-    assert len(payload["lines"]) == 6
+    assert len(payload["lines"]) == 7
     assert any(line["lifecycle"] == "obsolete" for line in payload["lines"])
 
 
@@ -178,3 +178,28 @@ def test_check_key_offline_proves_the_probe_part_is_in_the_catalogue(capsys):
     text = capsys.readouterr().out
     assert code == EXIT_OK
     assert "MATCHED" in text
+
+
+def test_the_demo_is_useful_with_no_key_at_all(capsys):
+    """What a stranger sees. 0.2.0 gave them ten lines of "not checked" and
+    nothing else -- a headline feature behind a door most people will not open,
+    in a project whose first-user strategy is that a stranger installs it and
+    reports a bug.
+
+    Structural checks need no key, no network and no account, so this must
+    produce real findings."""
+    code = main(["enrich", DEMO])          # no --offline, no credentials
+    text = capsys.readouterr().out
+    assert code == EXIT_PROBLEMS           # the missing part number is critical
+    assert "no manufacturer part number" in text
+    assert "designator(s) but a quantity of" in text
+    assert "finding(s):" in text
+
+
+def test_a_run_with_no_key_never_claims_the_parts_were_checked(capsys):
+    """The other half. Useful findings must not be mistaken for a clean bill on
+    the parts themselves."""
+    main(["enrich", DEMO])
+    text = capsys.readouterr().out
+    assert "NOT CHECKED" in text
+    assert "no distributor asked has this part number" not in text

@@ -382,7 +382,8 @@ def load_bom(path, max_header_scan: int = 20) -> tuple[list[Component], IngestRe
                 report.rows_skipped_dnp += 1
                 continue
 
-        name = cell("name") or cell("designator") or "(unnamed)"
+        designator = cell("designator")
+        name = cell("name") or designator or "(unnamed)"
 
         # A spreadsheet BOM usually ends in a summary row. Counting it as a
         # line item inflates the part count, and if its cost column happens to
@@ -430,6 +431,7 @@ def load_bom(path, max_header_scan: int = 20) -> tuple[list[Component], IngestRe
             manufacturer=cell("manufacturer"),
             manufacturer_part_number=cell("manufacturer_part_number"),
             lead_time_days=number("lead_time_days", _parse_int, 0),
+            designator=designator,
         ))
 
     return components, report

@@ -1916,3 +1916,58 @@ which passes now and would not have yesterday.
 history, artifacts. That list is the honest shape of the question "could this
 reach a stranger", and each entry was added after something got through the
 previous three.
+
+## D-053 — A feature behind a door most people will not open
+
+**Decision:** make `helix-bom enrich` do real work with no API key, by adding
+six checks that need only the file, and demote distributor lookup from being the
+whole feature to being a bonus on top of them.
+
+**Why.** 0.2.0 shipped `enrich` as its headline feature. Run without a
+distributor account it produced this, in full:
+
+    10 lines, 0 looked up, 10 not looked up
+    10 of 10 lines were NOT CHECKED. This is not a clean bill:
+        10 x Mouser needs MOUSER_API_KEY in the environment.
+
+Ten lines, zero checked, one message repeated ten times. Every test passed, the
+gate was green, the release was verified from a clean venv — and the thing was
+useless to anybody who had not opened a trade account. In a project whose entire
+first-user strategy is that a stranger installs it and reports a bug, that is
+not a small miss. It is the feature not existing for the people it was for.
+
+The mistake was not in the building. It was in choosing what to build without
+asking whether the operator would open the accounts it depended on. When the
+answer turned out to be no, the feature became inert, and only then did anyone
+run it the way a stranger would.
+
+**What the checks are, and why these six.** Every one is a defect that ships
+boards wrong and is visible without a network: no part number at all; a value
+in the part number column; a placeholder; the same part on two lines; the same
+designator on two lines; designators that do not match the quantity.
+
+The first is not a guess. `docs/DEMAND_EVIDENCE.md` reads twenty answers to
+eight questions about getting a usable BOM out of a CAD tool, and the commonest
+defect in them was not a wrong part number — it was no part number.
+
+**The false positive that shaped the value rule.** Its first version called
+`61300411121` — a real Wurth part number — "a value, not a part number", and
+marked it CRITICAL. Numeric part numbers are ordinary: Wurth, Molex and TE all
+use them. The rule now requires a unit, so a bare number is left alone. That
+costs it `10` for a ten-ohm resistor, and that is the right way to be wrong. A
+missed defect is a nuisance; a confident accusation against correct work is why
+somebody stops using a tool.
+
+**A clean report now states its own scope.** "Nothing wrong found" after a
+structural pass and after a distributor confirmed every part are very different
+claims, and they printed the same sentence. They no longer do. This is the same
+rule as `SkippedCheck` and the three-valued `Outcome`, applied to the sentence
+that reads most like a pass.
+
+**Cost impact:** none. Stdlib only, no network, no configuration. `Component`
+gained a `designator` field that both readers already had and both discarded.
+
+**Future implications:** the general lesson is not about distributors. It is
+that a feature depending on something the operator has not agreed to do is a
+feature that does not exist yet, and the way to find that out is to run it as a
+stranger would before shipping it — not after.

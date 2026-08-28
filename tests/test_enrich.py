@@ -384,11 +384,24 @@ def test_findings_are_ordered_worst_first():
                                                            "info": 2}[s])
 
 
-def test_a_clean_run_says_what_it_actually_checked():
-    """"Nothing wrong found" is only meaningful with a count beside it."""
+def test_a_clean_run_states_the_scope_of_its_own_claim():
+    """"Nothing wrong" after a structural pass and "nothing wrong" after a
+    distributor confirmed every part are very different claims, and before
+    0.2.1 they printed the same sentence. The scope travels with the verdict."""
     text = _run([_component("BME280")],
                 _Fake({"BME280": _matched(_record())})).describe(now=NOW)
-    assert "Nothing wrong found in the 1 lines that were checked" in text
+    assert "Nothing wrong found:" in text
+    assert "checked for structure" in text
+    assert "looked up at a distributor" in text
+
+
+def test_a_clean_run_with_no_distributor_claims_only_the_smaller_thing():
+    """The case that matters most, because it is what a stranger with no API
+    key sees. It must not read as a clean bill of health for the parts."""
+    blocked = _Fake(usable=False, reason="MOUSER_API_KEY is not set")
+    text = _run([_component("BME280")], blocked).describe(now=NOW)
+    assert "checked for structure" in text
+    assert "looked up at a distributor" not in text
 
 
 def test_an_empty_report_describes_itself_without_crashing():

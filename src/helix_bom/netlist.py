@@ -187,6 +187,7 @@ def load_netlist(path) -> tuple[list, list, NetlistReport]:
                 manufacturer=properties.get("Manufacturer", ""),
                 manufacturer_part_number=mpn,
                 lead_time_days=0,
+                designator=ref,
             ))
     report.components = len(components)
 

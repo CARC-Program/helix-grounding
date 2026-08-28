@@ -39,6 +39,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from decimal import Decimal
 
+from . import structure
 from .distributors.base import Lifecycle, Lookup, Outcome
 
 # A stated price is called wrong when it is off by this much *and* the money
@@ -87,6 +88,7 @@ class LineResult:
 @dataclass
 class EnrichmentReport:
     lines: list = field(default_factory=list)
+    structural: list = field(default_factory=list)
     distributors: list = field(default_factory=list)
     unverified: list = field(default_factory=list)
     offline_data_used: bool = False
@@ -105,6 +107,8 @@ class EnrichmentReport:
     @property
     def findings(self) -> list:
         found = [f for line in self.lines for f in line.findings]
+        found.extend(Finding(f.severity, f.reference, f.message, f.evidence)
+                     for f in self.structural)
         found.sort(key=lambda f: (SEVERITY_RANK.get(f.severity, 9), f.reference))
         return found
 
@@ -179,9 +183,14 @@ class EnrichmentReport:
         if findings:
             out.append(f"\n{len(findings)} finding(s):")
             out.extend(f.line() for f in findings)
-        elif self.checked:
-            out.append(f"\nNothing wrong found in the {len(self.checked)} lines "
-                       f"that were checked.")
+        else:
+            # Said with its scope attached. "Nothing wrong" after a structural
+            # pass is a much smaller claim than "nothing wrong" after a
+            # distributor confirmed every part, and the two must not read alike.
+            scope = f"{len(self.lines)} line(s) checked for structure"
+            if self.checked:
+                scope += f", {len(self.checked)} looked up at a distributor"
+            out.append(f"\nNothing wrong found: {scope}.")
 
         priced = self.priced_lines
         if priced:
@@ -330,6 +339,10 @@ def enrich(components, distributors, cache=None, compare: bool = False,
     two-hundred-line BOM.
     """
     report = EnrichmentReport()
+    # First, and always. These need no key, no network and no account, and
+    # 0.2.0 shipped without them -- so a run with no credentials produced ten
+    # lines of "not checked" and nothing else.
+    report.structural = structure.check(components)
     usable = []
     for distributor in distributors:
         capabilities = distributor.capabilities

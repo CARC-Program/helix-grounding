@@ -63,6 +63,10 @@ class Component:
     manufacturer: str = ""  # optional, e.g. "Texas Instruments" -- context for synthesis
     manufacturer_part_number: str = ""  # optional, e.g. "TPS61023DRLR"
     lead_time_days: int = 0  # 0 = not specified/in-stock; used by the new supply-chain check below
+    designator: str = ""  # e.g. "R1, R2, R3" -- the references this line covers.
+    # Read by both file formats and, until 0.2.1, thrown away. It is the only
+    # field that says how many physical parts a line represents, which is what
+    # makes "R1, R2, R3" with a quantity of 2 detectable at all.
 
 
 @dataclass

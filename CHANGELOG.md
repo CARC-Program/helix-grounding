@@ -1,5 +1,58 @@
 # Changelog
 
+## 0.2.1 — 2026-08-27
+
+> **`helix-bom enrich` now finds real problems with no API key.** 0.2.0 shipped
+> it asking a distributor about every line, so without an account it did
+> nothing at all: ten lines, zero checked, one message repeated ten times. Six
+> checks that need only the file now run first, always.
+
+### Added
+
+**Structural checks, no network, no account, no configuration.** Each is a
+defect that ships boards wrong and is visible in the file alone:
+
+- **no manufacturer part number** — the commonest defect in real BOMs, and the
+  one `docs/DEMAND_EVIDENCE.md` points straight at. A value and a footprint are
+  not an orderable part.
+- **a value in the part number column** — `10k` says what the part does, not
+  which part it is. Two thousand different resistors are 10k.
+- **a placeholder** — TBD, TODO, N/A, XXX, never filled in.
+- **the same part on two lines** — ordered twice, costed twice.
+- **the same designator on two lines** — a reference designates one part on the
+  board; two lines claiming R3 means one is wrong, and no distributor or
+  assembly house catches it.
+- **designators that do not match the quantity** — `R1, R2, R3` with a quantity
+  of 2. One of the two numbers is wrong. Ranges are expanded, so `J1-J4` counts
+  as four rather than being called a mismatch.
+
+Distributor lookup is now a bonus on top of these rather than the whole
+feature. If a key is set it still runs and still checks lifecycle, stock,
+minimum quantity and price at the quantity being bought.
+
+### Changed
+
+**A clean report states the scope of its own claim.** "Nothing wrong found" now
+says what was actually checked — structure only, or structure plus a
+distributor confirming every part. Those are very different claims and until now
+they printed the same sentence.
+
+**`Component` carries its designator.** Both readers had it and both threw it
+away. It is the only field that says how many physical parts a line represents.
+
+### Notes
+
+The value-detector requires a unit. Its first version called `61300411121` — a
+real Wurth part number — "a value, not a part number", as a CRITICAL finding.
+Numeric part numbers are ordinary; Wurth, Molex and TE all use them. So a bare
+number is left alone, which costs the rule `10` for a ten-ohm resistor. That is
+the right way to be wrong: a missed defect is a nuisance, and a confident
+accusation against a correct line is why people stop trusting a tool.
+
+The Mouser and Digi-Key adapters remain unrun against the live APIs. Nothing
+about that changed in this release, and the report still says so whenever one
+is used.
+
 ## 0.2.0 — 2026-08-26
 
 > **`helix-bom enrich` checks your part numbers against somebody who actually

@@ -255,13 +255,7 @@ def _render_diagnostic(report, result, components) -> str:
     add("names something confidential, edit it before posting.")
     add("")
 
-    try:
-        from importlib.metadata import version
-        installed = version("helix-grounding")
-    except Exception:
-        installed = "unknown (running from source?)"
-
-    add(f"helix-grounding   {installed}")
+    add(f"helix-grounding   {_version_line()}")
     add(f"python            {_sys.version.split()[0]}")
     add(f"platform          {platform.system()} {platform.machine()}")
     add("")
@@ -467,13 +461,7 @@ def _render_diagnostic_netlist(report, result, links) -> str:
     add("structure is reported here.")
     add("")
 
-    try:
-        from importlib.metadata import version
-        installed = version("helix-grounding")
-    except Exception:
-        installed = "unknown (running from source?)"
-
-    add(f"helix-grounding   {installed}")
+    add(f"helix-grounding   {_version_line()}")
     add(f"python            {_sys.version.split()[0]}")
     add(f"platform          {platform.system()} {platform.machine()}")
     add("")
@@ -498,6 +486,31 @@ def _render_diagnostic_netlist(report, result, links) -> str:
     add("the component count, a link it missed, a net it read as power.")
 
     return "\n".join(lines)
+
+
+def _version_line() -> str:
+    """The version actually running, and the installed one when they differ.
+
+    This reported `importlib.metadata.version("helix-grounding")` alone, which
+    is the version pip recorded -- not necessarily the code being executed. On
+    a source checkout with an older release installed alongside, the diagnostic
+    report named a version that was not running. That report exists to make bug
+    triage possible, so a wrong version in it costs somebody a wasted hour
+    looking at the wrong code.
+    """
+    try:
+        from importlib.metadata import version
+        installed = version("helix-grounding")
+    except Exception:
+        installed = ""
+    try:
+        from helix_grounding import __version__ as running
+    except Exception:
+        running = ""
+
+    if running and installed and running != installed:
+        return f"{running} running, {installed} installed -- source checkout"
+    return running or installed or "unknown (running from source?)"
 
 
 def build_parser() -> argparse.ArgumentParser:

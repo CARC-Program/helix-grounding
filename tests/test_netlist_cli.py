@@ -316,3 +316,39 @@ def test_the_netlist_diagnostic_still_says_enough_to_debug(capsys):
     assert "components      6" in out
     assert "single-node" in out
     assert "checks that could run   0 of 5" in out
+
+
+def test_the_diagnostic_names_the_version_that_is_running(capsys):
+    """This reported the version pip recorded, not the code being executed. On
+    a source checkout with an older release installed alongside, the report
+    named a version that was not running -- and this report exists to make bug
+    triage possible, so a wrong version in it costs somebody an hour reading
+    the wrong code."""
+    from helix_bom.cli import _version_line
+    import helix_grounding
+
+    line = _version_line()
+    assert helix_grounding.__version__ in line
+
+    main(["diagnose", PRICED_CSV])
+    assert helix_grounding.__version__ in capsys.readouterr().out
+
+
+def test_a_version_mismatch_is_reported_as_a_mismatch(monkeypatch):
+    """Both numbers, and which is which. Silently preferring one would trade a
+    wrong answer for a different wrong answer."""
+    import helix_bom.cli as cli
+    import importlib.metadata as metadata
+    monkeypatch.setattr(metadata, "version", lambda name: "9.9.9")
+    line = cli._version_line()
+    assert "9.9.9 installed" in line
+    assert "running" in line
+
+
+def test_the_diagnostic_still_carries_no_component_data(capsys):
+    """The whole point of the file: safe to paste into a public bug report.
+    A version fix must not have widened what it prints."""
+    main(["diagnose", PRICED_CSV])
+    text = capsys.readouterr().out
+    for secret in ("BME280", "STM32", "RC0603", "GRM188", "$", "0.02"):
+        assert secret not in text, f"{secret!r} leaked into the diagnostic"

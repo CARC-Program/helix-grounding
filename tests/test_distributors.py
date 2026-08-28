@@ -534,3 +534,61 @@ def test_no_distributor_has_a_way_to_spend_money():
         for name in dir(cls):
             assert name.lower().replace("_", "") not in forbidden, \
                 f"{cls.__name__} grew {name}()"
+
+
+# --------------------------------------------------------------------
+# What the published schema turned up
+# --------------------------------------------------------------------
+
+def test_mouser_reads_the_separate_discontinued_flag():
+    """`IsDiscontinued` is its own field in the published schema, separate from
+    `LifecycleStatus`. A part can carry a blank or cheerful lifecycle string and
+    still be flagged discontinued; the worse reading wins."""
+    part = dict(MOUSER_PART, LifecycleStatus="Active", IsDiscontinued="Yes")
+    result = _mouser(_mouser_payload([part])).lookup("GRM188R71H104KA93D")
+    assert result.record.lifecycle is Lifecycle.OBSOLETE
+    assert "discontinued" in result.record.lifecycle_text.lower()
+
+
+def test_a_part_not_flagged_discontinued_keeps_its_stated_lifecycle():
+    part = dict(MOUSER_PART, LifecycleStatus="Active", IsDiscontinued="No")
+    result = _mouser(_mouser_payload([part])).lookup("GRM188R71H104KA93D")
+    assert result.record.lifecycle is Lifecycle.ACTIVE
+
+
+def test_mouser_keeps_the_suggested_replacement():
+    """When a part is dead the distributor often says what to use instead. That
+    is most of the value of the finding -- and it is carried as their
+    suggestion, never acted on."""
+    part = dict(MOUSER_PART, LifecycleStatus="Obsolete",
+                SuggestedReplacement="GRM188R71H104KA93J")
+    result = _mouser(_mouser_payload([part])).lookup("GRM188R71H104KA93D")
+    assert result.record.suggested_replacement == "GRM188R71H104KA93J"
+
+
+def test_package_comes_from_product_attributes_not_a_field_that_does_not_exist():
+    """There is no `Package` field in the schema. The first version of this
+    looked for one and silently fell through to Category every time."""
+    part = dict(MOUSER_PART, ProductAttributes=[
+        {"AttributeName": "Package / Case", "AttributeValue": "0603 (1608 Metric)"},
+        {"AttributeName": "Tolerance", "AttributeValue": "10%"},
+    ])
+    result = _mouser(_mouser_payload([part])).lookup("GRM188R71H104KA93D")
+    assert result.record.package == "0603 (1608 Metric)"
+
+
+def test_package_falls_back_to_category_when_no_attribute_says_it():
+    result = _mouser(_mouser_payload([MOUSER_PART])).lookup("GRM188R71H104KA93D")
+    assert result.record.package == MOUSER_PART.get("Category", "")
+
+
+def test_the_suggested_replacement_survives_the_cache(tmp_path):
+    cache = LookupCache(path=tmp_path / "c.json")
+    part = dict(MOUSER_PART, LifecycleStatus="Obsolete",
+                SuggestedReplacement="ABC123")
+    original = _mouser(_mouser_payload([part])).lookup("GRM188R71H104KA93D")
+    cache.put("mouser", "GRM188R71H104KA93D", original, now=NOW)
+    cache.save()
+    reloaded = LookupCache(path=tmp_path / "c.json").get(
+        "mouser", "GRM188R71H104KA93D", now=NOW)
+    assert reloaded.record.suggested_replacement == "ABC123"

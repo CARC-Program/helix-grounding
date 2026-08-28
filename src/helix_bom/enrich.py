@@ -243,10 +243,19 @@ def _check_lifecycle(line) -> list:
     if not record:
         return []
     if record.lifecycle is Lifecycle.OBSOLETE:
-        return [Finding("critical", line.reference,
-                        "the part is obsolete",
-                        f"Distributor says: {record.lifecycle_text!r}. "
-                        f"This design cannot be built from it.")]
+        evidence = (f"Distributor says: {record.lifecycle_text!r}. "
+                    f"This design cannot be built from it.")
+        if record.suggested_replacement:
+            # Their suggestion, said to be theirs, and never acted on. The
+            # difference between "this part is dead" and "this part is dead and
+            # the distributor suggests X" is most of the value of the finding --
+            # but substituting it automatically would be inventing a design
+            # decision, which is the thing this whole library exists against.
+            evidence += (f" They suggest {record.suggested_replacement} as a "
+                         f"replacement; that is their suggestion to check, not "
+                         f"a swap this tool has made.")
+        return [Finding("critical", line.reference, "the part is obsolete",
+                        evidence)]
     if record.lifecycle is Lifecycle.NRND:
         return [Finding("warning", line.reference,
                         "not recommended for new designs",

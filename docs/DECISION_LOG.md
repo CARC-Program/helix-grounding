@@ -1971,3 +1971,48 @@ gained a `designator` field that both readers already had and both discarded.
 that a feature depending on something the operator has not agreed to do is a
 feature that does not exist yet, and the way to find that out is to run it as a
 stranger would before shipping it — not after.
+
+## D-054 — Check the adapter against the schema, since the API is out of reach
+
+**Decision:** verify the Mouser adapter's request and response shapes against
+Mouser's published Swagger document, and record that Digi-Key cannot be checked
+the same way.
+
+**Why.** Both adapters were written from documentation summaries and memory, and
+neither can be run: getting credentials needs a trade account the operator is
+not opening. "Never tested" was the honest label but not the end of what could
+be done. `https://api.mouser.com/api/docs/v1` is public, and comparing field
+names against it is real verification that needs no key.
+
+**What it found.** The envelope, the `Parts` array, the `apiKey` query
+parameter, the templated version in the path and `partSearchOptions=Exact` were
+all correct. Three fields were being ignored — `IsDiscontinued`,
+`SuggestedReplacement`, `ProductAttributes` — and one, `Package`, does not
+exist, so the code that looked for it fell through to the product category on
+every part and always had.
+
+`SuggestedReplacement` is the one worth having. An obsolete part is a dead end;
+an obsolete part with the distributor's own suggested replacement beside it is
+something the reader can act on. It is quoted as theirs and never substituted.
+
+**What it could not settle.** The request field is `mouserPartNumber` and its
+description says "the specific Mouser part number", while this endpoint is what
+every client uses for manufacturer part numbers. A schema cannot answer that; a
+key can, and `--check-key` probes with an MPN for exactly this reason.
+
+Digi-Key's specification sits behind an authenticated portal, so its shapes stay
+unverified. That asymmetry is now written into both adapters rather than left
+for a reader to assume they were treated alike.
+
+**Cost impact:** none. One public document, read once.
+
+**Future implications:** the schema allows ten part numbers per request. Against
+a thousand-a-day limit and a two-hundred-line BOM that is a tenfold saving and
+the largest efficiency left in this layer. Not built, and recorded here so it is
+a decision rather than an oversight.
+
+A note kept because it is unresolved rather than solved: during this work the
+suite failed once on `test_measuring_actually_runs_the_suite` and then passed
+four times running. The likeliest explanation is a stale `__pycache__` caught
+mid-edit, but that was not demonstrated, and a cause that was guessed at is not
+a cause. If it recurs, this is the first place to look.

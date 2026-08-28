@@ -260,10 +260,37 @@ def test_draft_command_refuses_an_unmeasured_test_count(capsys):
 
 
 def test_check_command_rejects_a_tampered_draft(tmp_path, capsys):
+    """Tampering with a claim the grounding actually verifies.
+
+    This used to replace "--budget 50" with "--budget 9999". When the draft was
+    rewritten to lead with `enrich`, that line went away, the replacement became
+    a no-op, and the test failed asking why an untampered draft was accepted --
+    which is the useful failure. Had it been asserting the other way it would
+    have quietly passed while testing nothing.
+
+    So it now inflates a number the verifier actually extracts, and it asserts
+    three things rather than one: that the untampered draft passes, that the
+    tampering changed something, and that a claim was really checked. A future
+    rewrite that drops the claim fails here instead of going quietly vacuous.
+
+    The guard earned its place immediately -- the first replacement tried here
+    (the package name) also changed the text and also passed, because the
+    verifier extracts identifiers in a form that substitution did not produce.
+    Without the third assertion that would have read as a working test.
+    """
+    original = drafts.render("reddit_pcb", FACTS)
+    clean = tmp_path / "clean.md"
+    clean.write_text(original, encoding="utf-8")
+    assert main(["check", str(clean)]) == 0, "the untampered draft should pass"
+    capsys.readouterr()
+
+    assert drafts.verify(original, FACTS).checked_count > 0, \
+        "the draft states no checkable claim -- tampering with it proves nothing"
+
+    tampered = original.replace("of 2.", "of 9999.")
+    assert tampered != original, "nothing was tampered -- this test proves nothing"
     path = tmp_path / "post.md"
-    path.write_text(drafts.render("reddit_pcb", FACTS).replace("--budget 50",
-                                                               "--budget 9999"),
-                    encoding="utf-8")
+    path.write_text(tampered, encoding="utf-8")
     assert main(["check", str(path)]) == 1
     assert "UNGROUNDED" in capsys.readouterr().err
 

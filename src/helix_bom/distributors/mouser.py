@@ -7,14 +7,31 @@ https://api.mouser.com/api/docs/ui — search by part number is a POST to
 in the body. The limits are thirty calls a minute and a thousand a day, which is
 why `cache.py` exists and is on by default.
 
-**This adapter has not been run against the live API.** Nobody here has a Mouser
+**The request and response shapes are checked against the published
+specification.** `https://api.mouser.com/api/docs/v1` is a public Swagger
+document and every field name used here was compared against it: the
+`Errors`/`SearchResults` envelope, `SearchResults.Parts`, the `apiKey` query
+parameter, the templated version in the path, `SearchByPartRequest` with
+`mouserPartNumber` and `partSearchOptions` (valid values None and Exact), and
+every part field read below. That check found three things this adapter was
+missing and one field it looked for that does not exist.
+
+**It has still never been run against the live API.** Nobody here has a Mouser
 key: getting one requires an account, and the account terms are the account
-holder's to read and accept. Everything below is written from the published
-request and response shapes and tested against recorded fixtures, which proves
-the parsing and proves nothing about the network. ``capabilities.verified_against_live_api``
-is False and stays False until somebody runs `helix-bom enrich --check-key` with
-a real key and reports back. That flag is printed in the report, so no reader is
-misled about what has actually been exercised.
+holder's to read and accept. A schema is not a server, so
+``capabilities.verified_against_live_api`` is False and stays False until
+somebody runs `helix-bom enrich --check-key` with a real key and reports back.
+That flag is printed in the report, so no reader is misled about what has
+actually been exercised.
+
+One thing the schema cannot settle: the request field is named
+`mouserPartNumber` and its description says "the specific Mouser part number",
+yet this endpoint is what every client uses for manufacturer part numbers.
+`--check-key` probes with an MPN precisely so that a real key answers this.
+
+Not used yet, and worth doing: the schema allows **ten part numbers per
+request**, separated. Against a thousand-a-day limit that is a tenfold
+improvement on a long BOM, and it is the single best efficiency left here.
 
 The key is read from ``MOUSER_API_KEY`` and never written anywhere: not to the
 cache, not to the log, not into an error message. Errors quote the HTTP status
@@ -33,6 +50,7 @@ from datetime import datetime, timezone
 
 from .base import (
     Capabilities,
+    Lifecycle,
     Lookup,
     Offer,
     Outcome,
@@ -45,6 +63,18 @@ from .base import (
 
 API_ROOT = "https://api.mouser.com/api/v1"
 TERMS_URL = "https://www.mouser.com/en/apiterms/"
+
+
+def _attribute(part: dict, name: str) -> str:
+    """One of a part's ProductAttributes, by name.
+
+    The schema gives attributes as {AttributeName, AttributeValue} pairs rather
+    than as fields, so package, tolerance and voltage rating all arrive here.
+    """
+    for entry in part.get("ProductAttributes") or []:
+        if name.lower() in str(entry.get("AttributeName", "")).lower():
+            return str(entry.get("AttributeValue", "") or "")
+    return ""
 
 
 def _as_int(value):
@@ -82,8 +112,9 @@ class MouserDistributor:
             rate_limit_per_minute=30,
             live=True,
             verified_against_live_api=False,
-            notes="Written from the published API shape; never run against the "
-                  "live service from here. Read the terms before commercial use.",
+            notes="Field names checked against the published Swagger schema; "
+                  "never run against the live service from here. Read the terms "
+                  "before commercial use.",
         )
 
     def usable(self, environment=None) -> tuple:
@@ -167,15 +198,30 @@ class MouserDistributor:
                       candidates=tuple(records[:5]))
 
     def _record(self, part: dict) -> PartRecord:
+        # `IsDiscontinued` is a separate signal from `LifecycleStatus` and both
+        # appear in the published schema. A part can carry a blank or cheerful
+        # lifecycle string and still be flagged discontinued, so the two are
+        # read together and the worse reading wins -- the same rule
+        # `read_lifecycle` applies within a single string.
         status = part.get("LifecycleStatus") or ""
+        discontinued = str(part.get("IsDiscontinued", "")).strip().lower()
+        lifecycle = read_lifecycle(status)
+        if discontinued in ("true", "yes", "1"):
+            lifecycle = Lifecycle.OBSOLETE
+            status = (status + " (Mouser: discontinued)").strip()
+
         return PartRecord(
             manufacturer_part_number=part.get("ManufacturerPartNumber", ""),
             manufacturer=part.get("Manufacturer", ""),
             description=part.get("Description", ""),
-            lifecycle=read_lifecycle(status),
+            lifecycle=lifecycle,
             lifecycle_text=status,
             datasheet_url=part.get("DataSheetUrl", ""),
-            package=part.get("Package", "") or part.get("Category", ""),
+            # There is no `Package` field in the published schema -- the first
+            # version of this looked for one and always fell through to
+            # Category. Package is one of the ProductAttributes when present.
+            package=_attribute(part, "package") or part.get("Category", ""),
+            suggested_replacement=part.get("SuggestedReplacement", "") or "",
             offers=(self._offer(part),),
         )
 

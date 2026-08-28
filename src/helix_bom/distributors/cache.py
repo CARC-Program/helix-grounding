@@ -191,6 +191,7 @@ def _record_to(record: PartRecord) -> dict:
         "lifecycle_text": record.lifecycle_text,
         "datasheet_url": record.datasheet_url,
         "package": record.package,
+        "suggested_replacement": record.suggested_replacement,
         "offers": [_offer_to(o) for o in record.offers],
     }
 
@@ -204,6 +205,7 @@ def _record_from(data: dict) -> PartRecord:
         lifecycle_text=data.get("lifecycle_text", ""),
         datasheet_url=data.get("datasheet_url", ""),
         package=data.get("package", ""),
+        suggested_replacement=data.get("suggested_replacement", ""),
         offers=tuple(_offer_from(o) for o in data.get("offers", ())),
     )
 

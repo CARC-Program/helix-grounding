@@ -200,6 +200,12 @@ class PartRecord:
     lifecycle_text: str = ""            # the distributor's own wording, kept verbatim
     datasheet_url: str = ""
     package: str = ""
+    # What the distributor says to use instead. Only ever *their* suggestion,
+    # repeated verbatim and attributed -- never this tool's recommendation, and
+    # never substituted for the part the BOM asked for. "This part is dead" and
+    # "this part is dead, and Mouser suggests X" are the same finding with very
+    # different amounts of use to the person reading it.
+    suggested_replacement: str = ""
     offers: tuple = ()
 
     @property

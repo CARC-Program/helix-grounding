@@ -122,17 +122,45 @@ def _requires_measured_tests(facts: ProjectFacts) -> int:
 # --------------------------------------------------------------------
 
 def _reddit_pcb(facts: ProjectFacts) -> str:
+    """The lead is `enrich`, and that is a deliberate change.
+
+    The first version of this draft led with budget and enclosure-fit checks,
+    which is what the tool did when the draft was written. It is not what this
+    audience cares about. `docs/DEMAND_EVIDENCE.md` read ten thousand questions
+    from hardware people: the biggest cluster is operating a design tool, and
+    the commonest BOM defect is not a wrong part number, it is no part number.
+
+    So the opening line is the check that finds that, and it is the one that
+    needs no account, no key and no configuration. Anything requiring a signup
+    is further down, where somebody already interested can find it.
+    """
     return f"""
-**Free CLI that sanity-checks a BOM export — trying to break it**
+**Free CLI that checks a BOM export for the mistakes that stop a build — trying to break it**
 
 I built a command-line tool that reads a BOM export (KiCad, Altium, or a
-spreadsheet) and flags budget overruns, long-lead parts, and enclosure fit.
-It runs entirely offline — your BOM never leaves your machine, and there is a
-test that disables the socket layer to prove it.
+spreadsheet) and looks for the things that are invisible until the boards come
+back wrong:
+
+- a line with no manufacturer part number — a value and a footprint are not
+  an orderable part
+- a value sitting in the part number column ("10k" is not a part number; two
+  thousand different resistors are 10k)
+- the same designator on two lines — one of them is wrong, and nothing
+  downstream catches it
+- designators that do not match the quantity: `R1, R2, R3` with a quantity
+  of 2. One of the two numbers is wrong
+- the same part on two separate lines, so it gets ordered twice
 
     {facts.install_command}
+    helix-bom enrich your_bom.csv        # the checks above, no account needed
     helix-bom demo                       # bundled example, no file needed
-    helix-bom review your_bom.csv --budget 50
+
+It runs entirely offline for those — your BOM never leaves your machine, and
+there is a test that disables the socket layer to prove it. If you set a
+distributor API key it will additionally check lifecycle, stock, minimum order
+quantity, and whether the price in your BOM is the price at the quantity you
+are actually buying. That part is optional and everything above works without
+it.
 
 Point it at a KiCad netlist instead and it reads the connectivity too:
 

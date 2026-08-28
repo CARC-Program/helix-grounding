@@ -1,5 +1,53 @@
 # Changelog
 
+## 0.2.2 — 2026-08-28
+
+> **The Mouser adapter is now checked against Mouser's published schema.** That
+> found three fields it was not reading and one it looked for that does not
+> exist. Most usefully: when a part is obsolete, the report now carries the
+> replacement the distributor suggests.
+
+### Added
+
+**An obsolete part reports the distributor's suggested replacement.** Mouser's
+schema has a `SuggestedReplacement` field and the adapter was ignoring it.
+"This part is dead" and "this part is dead, and Mouser suggests X" are the same
+finding with very different amounts of use to whoever reads it.
+
+It is quoted as *their* suggestion and nothing is substituted. Swapping a part
+automatically would be inventing a design decision, which is the thing this
+library exists against.
+
+**`IsDiscontinued` is read as well as `LifecycleStatus`.** They are separate
+fields. A part can carry a blank or cheerful lifecycle string and still be
+flagged discontinued; the worse reading wins.
+
+### Fixed
+
+**Package now comes from `ProductAttributes`.** There is no `Package` field in
+Mouser's schema. The adapter looked for one and silently fell through to the
+product category every time.
+
+### Notes
+
+The check was done against `https://api.mouser.com/api/docs/v1`, which is a
+public Swagger document. Everything else the adapter relies on was confirmed
+correct: the `Errors`/`SearchResults` envelope, `SearchResults.Parts`, the
+`apiKey` query parameter, the templated version in the path, and
+`partSearchOptions` accepting `Exact`.
+
+Two things that check could not settle, both recorded in the source. The
+request field is named `mouserPartNumber` while this endpoint is what every
+client uses for manufacturer part numbers — `--check-key` probes with an MPN so
+that a real key answers it. And the schema permits **ten part numbers per
+request**, which against a thousand-a-day limit is the largest efficiency still
+on the table; it is not implemented yet.
+
+**Digi-Key could not be checked the same way.** Its specification is behind an
+authenticated portal. So Mouser's shapes are schema-verified and Digi-Key's are
+not, and neither has been run against a live API. `verified_against_live_api`
+remains False for both, because a schema is not a server.
+
 ## 0.2.1 — 2026-08-27
 
 > **`helix-bom enrich` now finds real problems with no API key.** 0.2.0 shipped

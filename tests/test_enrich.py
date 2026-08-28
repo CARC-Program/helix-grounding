@@ -406,3 +406,21 @@ def test_a_clean_run_with_no_distributor_claims_only_the_smaller_thing():
 
 def test_an_empty_report_describes_itself_without_crashing():
     assert "0 lines" in EnrichmentReport().describe(now=NOW)
+
+
+def test_an_obsolete_part_carries_the_distributors_suggestion_without_acting_on_it():
+    """"This part is dead" and "this part is dead and the distributor suggests
+    X" are the same finding with very different amounts of use. Substituting it
+    automatically would be inventing a design decision, which is the thing this
+    library exists against -- so it is quoted, attributed, and left alone."""
+    record = PartRecord(
+        manufacturer_part_number="LM3914N", lifecycle=Lifecycle.OBSOLETE,
+        lifecycle_text="Obsolete", suggested_replacement="LM3914V",
+        offers=(Offer(distributor="f", distributor_part_number="", url="",
+                      fetched_at=NOW),))
+    report = _run([_component("LM3914N")], _Fake({"LM3914N": _matched(record)}))
+    finding = next(f for f in report.findings if "obsolete" in f.message)
+    assert "LM3914V" in finding.evidence
+    assert "their suggestion" in finding.evidence
+    # and the part number in the report is still the one the BOM asked for
+    assert report.lines[0].lookup.record.manufacturer_part_number == "LM3914N"

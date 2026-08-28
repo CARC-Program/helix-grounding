@@ -140,7 +140,7 @@ def test_every_internal_package_is_named_in_the_wheel_check():
     import inspect
     from helix_ops import release as release_module
     source = inspect.getsource(release_module.check_wheel_excludes_internal)
-    for name in ("helix_ops", "helix_api", "helix_signal"):
+    for name in ("helix_ops", "helix_api", "helix_signal", "helix_auto"):
         assert name in source, f"{name} is not checked for"
 
 

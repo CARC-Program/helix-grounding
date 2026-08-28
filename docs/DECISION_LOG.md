@@ -2016,3 +2016,59 @@ suite failed once on `test_measuring_actually_runs_the_suite` and then passed
 four times running. The likeliest explanation is a stale `__pycache__` caught
 mid-edit, but that was not demonstrated, and a cause that was guessed at is not
 a cause. If it recurs, this is the first place to look.
+
+## D-055 — An agent with a ceiling built into its type system
+
+**Decision:** build `helix_auto`, a local agent that reads, measures and
+drafts unattended, and make the actions it must never take impossible to
+register rather than merely refused.
+
+**Why it was asked for.** The operator is doing outreach by hand and
+reasonably wants it automated: posting, comments, replies, following, reviews,
+links, accounts, reposts, likes, dislikes. The motivation is sound. Roughly
+half the list is not.
+
+**Where the line falls, and why it is not caution.** Automated voting,
+following, account creation, reposting and bulk messaging are prohibited by the
+platforms and are on the operator's own specification's forbidden list. More
+practically: `BUSINESS_MODEL.md` names four viable channels and says the only
+acceptable ones are structural. Automated engagement gets an account banned
+from exactly those places, so the failure mode is not a warning email, it is
+losing a quarter of the distribution permanently and irreversibly.
+
+**Made structural, not documented.** `Task.__post_init__` refuses to construct
+a task whose name or description describes a forbidden action, and refuses to
+let an outward-facing task be Level 1. So somebody adding "like recent posts"
+gets an exception on their own machine at import time, rather than a working
+feature. Same move as `OpportunitySource` having no write method.
+
+**The guard's first real use was a false positive.** It rejected "release
+gate" -- which reads the working tree, the history and the built artifacts and
+sends nothing anywhere -- because "release" was in the outward list. The
+tempting fix was renaming the task. That is worse than the false positive: it
+teaches the next person to word around the check rather than repair it. The
+list lost "release"; "publish" and "upload" still catch the real thing, and two
+tests now hold both sides.
+
+**The design constraint on the briefing.** PyPI reports 421 downloads a month
+for a package nobody has promoted. Those are mirrors, CI and scanners. An agent
+that reported them as users would be a machine for producing false
+encouragement every morning -- this project's recurring failure wearing a new
+costume. So every signal carries a confidence, one GitHub issue outranks four
+hundred downloads, an unreadable source is never printed as zero, and a quiet
+day says "nothing needs you today" rather than inventing a task to look useful.
+
+**What this does not solve, said plainly.** Automating outreach is not what
+stands between this project and income. Zero strangers have run the tool. A
+faster way to send a message nobody has responded to is not the missing piece,
+and building one before the message is known to work mostly reaches a ban
+sooner.
+
+**Cost impact:** none. Stdlib only, internal, excluded from both the wheel and
+the sdist, and the release gate now names `helix_auto` alongside the other
+three internal packages.
+
+**Future implications:** when there is a signed Reddit agreement or an
+equivalent, posting can move from Level 3 to Level 2 -- acts then tells you --
+by changing one field. Nothing on the forbidden list moves at any point, which
+is why it is a different mechanism rather than a higher number.

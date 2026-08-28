@@ -262,7 +262,7 @@ def check_wheel_excludes_internal(root: Path) -> Check:
     body = match.group(1)
     # Every internal package, named explicitly. A new one that nobody adds
     # here ships silently, which is how helix_signal would have gone out.
-    leaked = [name for name in ("helix_ops", "helix_api", "helix_signal")
+    leaked = [name for name in ("helix_ops", "helix_api", "helix_signal", "helix_auto")
               if name in body]
     if leaked:
         return Check("wheel contents", False, f"{', '.join(leaked)} would ship")
@@ -386,7 +386,7 @@ def check_built_artifacts(root: Path | None = None) -> Check:
     for artifact in artifacts:
         for name, text in _artifact_files(artifact):
             leaf = name.split("/", 1)[-1] if artifact.suffix == ".gz" else name
-            for package in ("helix_ops", "helix_api", "helix_signal"):
+            for package in ("helix_ops", "helix_api", "helix_signal", "helix_auto"):
                 if f"{package}/" in leaf and artifact.suffix != ".gz":
                     internal.add(f"{package} in {artifact.name}")
             if text is None:

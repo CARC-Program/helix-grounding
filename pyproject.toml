@@ -81,7 +81,7 @@ packages = [
 # own scan. `helix-ops release-check` now reads the built artifacts rather than
 # the working tree, because the tree is not what gets published.
 include = ["src/", "tests/", "docs/", "scripts/", "README.md", "CHANGELOG.md", "LICENSE", "pyproject.toml"]
-exclude = ["src/helix_ops/", "src/helix_api/", "src/helix_signal/", "tests/sandbox/"]
+exclude = ["src/helix_ops/", "src/helix_api/", "src/helix_signal/", "src/helix_auto/", "tests/sandbox/"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

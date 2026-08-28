@@ -244,12 +244,23 @@ class Campaign:
                 f"product one — try a community not on this list before "
                 f"concluding anything about the tool.")
 
-    def milestone_status(self) -> str:
-        ran = self.strangers_who_ran_it
-        found_something = sum(
+    @property
+    def said_it_caught_something(self) -> int:
+        """Responses where the tool found a real problem for a real person.
+
+        A property rather than a local sum because `helix_auto` reports this
+        number too, and two places computing one number is how they drift --
+        which is the same fault as the README test count that went stale three
+        times.
+        """
+        return sum(
             1 for post in self.posts.values() for response in post.responses
             if response.kind == "bug" or (response.ran_it and response.kind == "question")
         )
+
+    def milestone_status(self) -> str:
+        ran = self.strangers_who_ran_it
+        found_something = self.said_it_caught_something
         lines = [
             f"strangers who ran it       {ran} (3 closes M2)",
             f"said it caught something   {found_something} (1 means it is worth pricing)",

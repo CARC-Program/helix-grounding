@@ -42,3 +42,8 @@ private/
 # fetched once and reused. What belongs in the repository is what this project
 # derived from it -- counts, clusters, conclusions -- plus the links back.
 data/corpus/
+
+# The generated outreach draft, kept at the root so it is easy to find and
+# edit. Regenerate any time with `python ops.py draft reddit_pcb`; the edited
+# version is yours and does not belong in the published history.
+reddit_post.md

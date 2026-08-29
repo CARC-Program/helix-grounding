@@ -222,7 +222,7 @@ pip install -e ".[dev]"
 pytest
 ```
 
-646 tests, nothing skipped, no database and no services required.
+648 tests, nothing skipped, no database and no services required.
 
 ```
 src/helix_grounding/   the library

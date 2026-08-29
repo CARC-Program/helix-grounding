@@ -15,17 +15,23 @@ hard error.
 """
 
 import socket
+from pathlib import Path
 
 import pytest
 
 from helix_bom.agent import BOMReviewAgent, DesignConstraints
 from helix_bom.cli import main
+from helix_bom.enrich_cli import EXIT_PROBLEMS
 from helix_bom.ingest import load_bom
 from helix_grounding import ClaimKind, GroundTruth, Verifier
 from helix_grounding.domains.bom import ground_truth_for_bom
 from helix_grounding.domains.invoice import ground_truth_for_invoice
 
 FIXTURE = "tests/fixtures/altium_with_pricing.csv"
+# A BOM whose parts *could* be looked up, unlike FIXTURE's. A keyless run
+# staying offline means nothing if there was nothing to look up.
+ENRICH_DEMO = str(Path(__file__).parent.parent / "src" / "helix_bom"
+                  / "examples" / "enrich_demo.csv")
 
 
 class NetworkAccessAttempted(AssertionError):
@@ -146,3 +152,58 @@ def test_the_retry_loop_sends_nothing_when_the_generator_is_local(no_network):
 
     assert outcome.validated
     assert outcome.attempts == 2
+
+
+# --------------------------------------------------------------------
+# enrich, which is the command a stranger is asked to run first
+# --------------------------------------------------------------------
+
+@pytest.fixture
+def a_strangers_machine(tmp_path, monkeypatch):
+    """No distributor credentials, and a cache belonging to nobody.
+
+    Both halves carry weight. Without the key removal this passes on a machine
+    that happens to have no key configured and fails on one that does, which
+    makes it a test of the developer's environment rather than of the code.
+    Without the cache redirect a previously cached answer could serve the
+    lookup, and the network would go untouched for the wrong reason.
+    """
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    for name in ("MOUSER_API_KEY", "DIGIKEY_CLIENT_ID", "DIGIKEY_CLIENT_SECRET"):
+        monkeypatch.delenv(name, raising=False)
+
+
+def test_enrich_without_a_key_sends_nothing(no_network, a_strangers_machine,
+                                            capsys):
+    """`helix-bom enrich <file>` is the first command the README and the
+    outreach draft put in front of a stranger, and the sentence beside it
+    promises their BOM never leaves the machine. Every other test in this file
+    covers `review`; this one covers the command that is actually offered
+    first, which is the one the promise is read against.
+    """
+    exit_code = main(["enrich", ENRICH_DEMO])
+    out = capsys.readouterr().out
+
+    assert exit_code == EXIT_PROBLEMS
+    # Found in the file alone, with no distributor and no network:
+    assert "no manufacturer part number" in out
+    assert "2 designator(s) but a quantity of 3" in out
+    # And it says why it could not do the rest, rather than implying it did.
+    assert "7 of 7 lines were NOT CHECKED" in out
+
+
+def test_a_key_would_have_reached_the_network(no_network, a_strangers_machine,
+                                              monkeypatch):
+    """The tripwire for the test above.
+
+    A keyless run touching no network is only evidence if the block sits on the
+    path a lookup actually takes. Hand the same command a key and it must reach
+    the guard. If this ever stops raising, either enrich has quietly stopped
+    looking parts up or the block has drifted off its path -- and in both cases
+    the test above has become theatre while still passing.
+    """
+    monkeypatch.setenv("MOUSER_API_KEY", "not-a-real-key")
+
+    with pytest.raises(NetworkAccessAttempted):
+        main(["enrich", ENRICH_DEMO])

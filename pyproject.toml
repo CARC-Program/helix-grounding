@@ -46,7 +46,14 @@ dependencies = []
 # Only needed to have a model *write* the narrative. Everything the library
 # verifies, and every deterministic check the CLI runs, works without these.
 llm = ["ollama>=0.3", "anthropic>=0.40", "python-dotenv>=1.0"]
-dev = ["pytest>=8", "build", "twine"]
+# fastapi and httpx are here because the suite tests the API skeleton and
+# three sandbox scripts drive it through TestClient, which needs httpx.
+# They are test-only: helix_api ships in neither the wheel nor the sdist,
+# and the runtime library still has no dependencies at all. Without them
+# CI failed on all eight runners while release-check on the maintainer's
+# machine reported all ten checks passing, which is the exact gap between
+# a green local run and a red one that this file now closes.
+dev = ["pytest>=8", "build", "twine", "fastapi", "httpx"]
 
 [project.urls]
 Documentation = "https://github.com/CARC-Program/helix-grounding#readme"

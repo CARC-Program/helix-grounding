@@ -317,6 +317,24 @@ def test_this_repository_currently_ships_clean_artifacts():
 # History
 # --------------------------------------------------------------------
 
+def _identity_list(directory: Path, name: str = "Nooneinparticular") -> Path:
+    """A synthetic identity list, so a test that needs one is not a test of
+    whether the maintainer's machine happens to have `private/identity.txt`.
+
+    Two tests below asserted on the result of a history scan while supplying
+    no names to scan for. On this machine the real list was there and they
+    passed; on a fresh checkout it cannot be there -- it is gitignored on
+    purpose -- so the scan correctly refused to run and both tests failed on
+    every CI runner. The names come from here instead, and the file is written
+    outside the repository under test: written inside it, `git add -A` would
+    commit the very name the scan is about to look for.
+    """
+    directory.mkdir(parents=True, exist_ok=True)
+    path = directory / "identity.txt"
+    path.write_text(f"# synthetic list, for tests only\n{name}\n", encoding="utf-8")
+    return path
+
+
 def _repo(tmp_path, canary_in=None, author=None):
     """A tiny git repository, optionally with a name planted somewhere."""
     env = ["-c", "user.name=Test", "-c", f"user.email={author or 'test@example.com'}"]
@@ -382,9 +400,15 @@ def test_a_stale_branch_keeping_an_old_root_alive_is_found(tmp_path):
     assert not check_history_names(repo).ok, "but it is in history"
 
 
-def test_a_clean_history_passes(tmp_path):
+def test_a_clean_history_passes(tmp_path, monkeypatch):
     from helix_ops.release import check_history_names
-    check = check_history_names(_repo(tmp_path))
+    monkeypatch.setattr(release, "IDENTITY_FILE",
+                        _identity_list(tmp_path / "outside"))
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    check = check_history_names(_repo(repo))
+
     assert check.ok
     assert "nobody named" in check.detail
 
@@ -399,10 +423,21 @@ def test_a_missing_identity_list_fails_the_history_scan(tmp_path):
         release.IDENTITY_FILE = original
 
 
-def test_a_history_too_large_to_scan_fails_rather_than_reporting_clean(tmp_path):
-    """A partial scan reporting a pass is the failure this module is about."""
+def test_a_history_too_large_to_scan_fails_rather_than_reporting_clean(
+        tmp_path, monkeypatch):
+    """A partial scan reporting a pass is the failure this module is about.
+
+    The identity list has to be a real one here, or the check refuses for the
+    wrong reason and this passes without ever reaching the size bound.
+    """
     from helix_ops.release import check_history_names
-    check = check_history_names(_repo(tmp_path), max_bytes=10)
+    monkeypatch.setattr(release, "IDENTITY_FILE",
+                        _identity_list(tmp_path / "outside"))
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    check = check_history_names(_repo(repo), max_bytes=10)
+
     assert not check.ok
     assert "bound" in check.detail
 

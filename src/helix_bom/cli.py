@@ -606,6 +606,17 @@ def build_parser() -> argparse.ArgumentParser:
     enrich_cmd.add_argument("--check-key", action="store_true",
                             help="look one known part up and report exactly what "
                                  "happened. Use this to prove a new key works.")
+    # A report somebody can read, rather than scrollback they cannot keep.
+    # Written locally and opened over file:// -- there is no server here and
+    # there must never be one, because the guarantee is that the BOM does not
+    # move.
+    enrich_cmd.add_argument("--html", nargs="?", const="", default=None,
+                            metavar="PATH",
+                            help="write a visual report and open it "
+                                 "(default: beside the BOM)")
+    enrich_cmd.add_argument("--no-open", action="store_true",
+                            help="write the --html report without opening a "
+                                 "browser")
     enrich_cmd.add_argument("--json", action="store_true",
                             help="emit JSON instead of text")
     enrich_cmd.add_argument("--strict", action="store_true",

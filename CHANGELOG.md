@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.3.0 — 2026-08-30
+
+> **Reviews can now be read as a page instead of scrollback.** `--html` writes
+> a self-contained report beside the BOM and opens it; `helix-bom-gui` does the
+> same from a file picker, with no terminal involved.
+
+### Added
+
+**`helix-bom enrich <file> --html [PATH]`.** One self-contained HTML file,
+written beside the BOM by default and opened in the browser. Severity filters,
+the full line table, every "not checked" reason with its cause, the column
+mapping the parser used, and the interconnect diagram embedded when the input
+is a netlist.
+
+Nothing in the page is fetched from anywhere -- no stylesheet, script, font or
+image -- so it renders identically with the network unplugged, and a test fails
+if an element that could load something is ever added. `--no-open` writes it
+without launching a browser.
+
+**`helix-bom-gui`.** A windowed entry point: pick a file, get the report. On
+Windows it is a GUI executable, so it can be double-clicked or have a BOM
+dragged onto it without a console window. It runs the same review as the
+command line rather than a second implementation of it.
+
+### Security
+
+**BOM content is escaped into the report.** A description or part number field
+containing markup is rendered as text, not executed. Tested with a script
+payload, because a BOM is somebody else's data being put into a document a
+browser will run.
+
+
 ## 0.2.2 — 2026-08-28
 
 > **The Mouser adapter is now checked against Mouser's published schema.** That

@@ -2072,3 +2072,63 @@ three internal packages.
 equivalent, posting can move from Level 3 to Level 2 -- acts then tells you --
 by changing one field. Nothing on the forbidden list moves at any point, which
 is why it is a different mechanism rather than a higher number.
+
+## D-056 -- A report as a local file, not a window and not a page
+
+**Decision:** render reviews as one self-contained HTML file written beside the
+BOM and opened over `file://`, plus a windowed entry point (`helix-bom-gui`)
+that picks a file and opens the same report. No desktop toolkit as the primary
+interface, and no hosted UI at any point.
+
+**Why it was asked for.** The terminal output was correctly called boring and
+robotic. That is not only an aesthetic complaint: scrollback cannot be kept,
+cannot be screenshotted into a comment in a way that makes anybody curious, and
+gives a returning user nothing to look at. The report is the artefact that
+travels, so its form is a distribution question rather than a decoration one.
+
+**The constraint that decided it before design started.** `SERVICE_MODEL.md`
+turns on one sentence -- money moves, the BOM does not -- so anything with a
+server was out before its merits could be weighed. What survives that is a
+document on the local disk. It happens to also be the cheapest option and the
+only one that costs no runtime dependency: producing it is string work.
+
+**What was rejected.** tkinter as a full interface looks worse than the
+terminal it replaces, and would have been a second rendering of the same data
+to keep in step. PyQt or Electron would add a large dependency to a library
+whose `project.dependencies` is deliberately empty, and a distributable binary
+needs code signing, which needs a legal entity -- the same blocker that stops
+payments, arriving from an unexpected direction. Deferred rather than refused:
+if somebody asks for an executable, that is when the trade is worth making.
+
+**Two properties are enforced rather than intended.** The document loads
+nothing: a test walks every `script`, `link`, `img`, `iframe`, `object` and
+`embed` element and fails on a `src` or `href`. A webfont would have told a
+third party that a review happened and when, and would have rendered wrong on a
+bench with no network while looking correct on the machine of whoever added it.
+Separately, every value is escaped, and that is tested with a real payload: a
+BOM is somebody else's text being rendered into a document a browser executes,
+and a description field containing a tag is a plausible export accident rather
+than an attack.
+
+**The report cannot change the verdict.** Writing it happens after the review
+and never touches the exit code. A read-only directory prints a line; it does
+not turn a BOM with four critical findings into a clean one. Tested, because
+that is the failure mode that would matter.
+
+**One implementation, not two.** The window calls the same review the command
+line calls. A second copy that drifted would be worse than having no window,
+because the two would disagree and only one of them would be under test.
+
+**Cost impact:** none. Standard library only; tkinter is used for the file
+picker and imported inside the function that needs it, so a Linux box without
+`python3-tk` gets a sentence rather than an import traceback.
+
+**What this does not solve, said plainly.** `strangers who ran it` is still
+zero. A better-looking report does not create a user. What it does is make the
+result shareable by the person who ran it, which is the only distribution
+mechanism this project has that does not involve the operator posting again.
+
+**Future implications:** `review` could take `--html` as well; the netlist path
+already carries its diagram through `enrich`, so the work is wiring rather than
+design. Printing is the browser's job and no PDF writer belongs here.
+

@@ -122,6 +122,34 @@ parse (`21 chars, letters`) rather than its contents. Safe to paste into a
 public issue. There is a test that fails if any component data ever reaches
 that output.
 
+### A report you can read, and nobody else can see
+
+Terminal output scrolls away and cannot be kept. `--html` writes a report next
+to the BOM and opens it:
+
+```bash
+helix-bom enrich my_bom.csv --html
+```
+
+Severity filters, the full line table, every "not checked" reason, the column
+mapping the parser used, and -- for a netlist -- the interconnect diagram
+embedded in the page.
+
+If you would rather not open a terminal at all:
+
+```bash
+helix-bom-gui
+```
+
+A file picker, then the report opens in your browser. On Windows it is a
+windowed executable, so it can be double-clicked or have a BOM dragged onto it
+without a console appearing.
+
+The report is one self-contained file. No stylesheet, script, font or image is
+fetched from anywhere, which means it renders identically with the network
+unplugged -- and a test fails if any element that could load something ever
+gets added. It is yours to keep, delete, or share with whoever you choose.
+
 ### Your BOM never leaves your machine
 
 A bill of materials exposes a design, its costs and its suppliers. Reading
@@ -222,7 +250,7 @@ pip install -e ".[dev]"
 pytest
 ```
 
-648 tests, nothing skipped, no database and no services required.
+662 tests, nothing skipped, no database and no services required.
 
 ```
 src/helix_grounding/   the library
@@ -234,7 +262,7 @@ docs/                  decision log, architecture, business model, case study
                        FIRST_USERS.md — how the first users get found
 ```
 
-`docs/DECISION_LOG.md` is 55 decisions with the reasoning attached, including
+`docs/DECISION_LOG.md` is 56 decisions with the reasoning attached, including
 the bugs that produced the design above. It is the most useful file here for
 understanding *why* rather than *what*.
 

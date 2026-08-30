@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "helix-grounding"
-version = "0.2.2"
+version = "0.3.0"
 description = "Catch the numbers an AI made up, without asking another AI"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -63,6 +63,12 @@ Changelog = "https://github.com/CARC-Program/helix-grounding/blob/main/CHANGELOG
 
 [project.scripts]
 helix-bom = "helix_bom.cli:main"
+
+[project.gui-scripts]
+# A windowed entry point rather than a console one: on Windows this
+# builds an executable that can be double-clicked or dragged onto
+# without a terminal appearing behind it, which is the whole point.
+helix-bom-gui = "helix_bom.desktop:main"
 # Deliberately not published: see the wheel packages note below. Reachable
 # from a source checkout as `python ops.py` -- the launcher at the repo root,
 # which works without an install or a PYTHONPATH. `python -m helix_ops.cli`

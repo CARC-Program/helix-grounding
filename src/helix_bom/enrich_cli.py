@@ -153,6 +153,42 @@ def _as_json(report) -> str:
     }, indent=2)
 
 
+def _write_report(args, report, ingest_report, nets, target) -> None:
+    """Write the visual report, and say where it went.
+
+    Failure here never changes the exit code. The review already ran and its
+    findings are already on stdout; a read-only machine or a missing desktop
+    session is a reason to print a line, not to report that the BOM is fine
+    when it is not.
+    """
+    from .cli import _version_line
+    from .report import default_destination, open_in_browser, write_html
+
+    diagram = ""
+    if nets:
+        from .diagrams import generate_netlist_interconnect_svg
+        from .netlist import interconnect_from_nets
+        diagram = generate_netlist_interconnect_svg(
+            interconnect_from_nets(nets),
+            source=getattr(ingest_report, "source", ""))
+
+    destination = Path(target) if target else default_destination(args.file)
+    try:
+        write_html(report, destination, ingest=ingest_report, source=args.file,
+                   diagram_svg=diagram, version=_version_line())
+    except OSError as exc:
+        err(f"could not write {destination}: {exc}")
+        return
+
+    # stderr, so that --html alongside --json leaves stdout parseable.
+    say = err if args.json else out
+    say(f"\nReport: {destination}")
+    if getattr(args, "no_open", False):
+        return
+    if not open_in_browser(destination):
+        say("Open it in a browser to read it.")
+
+
 def run_enrich(args, environment=None) -> int:
     environment = environment if environment is not None else os.environ
 
@@ -179,9 +215,10 @@ def run_enrich(args, environment=None) -> int:
     # sentence. Same failure, same treatment, and a pointer at the command
     # built for exactly this situation.
     try:
+        nets = []
         if _looks_like_netlist(args.file):
             from .netlist import load_netlist
-            components, _nets, ingest_report = load_netlist(args.file)
+            components, nets, ingest_report = load_netlist(args.file)
         else:
             components, ingest_report = load_bom(args.file)
     except FileNotFoundError:
@@ -221,6 +258,10 @@ def run_enrich(args, environment=None) -> int:
         if getattr(ingest_report, "missing_fields", None):
             out(f"\ncolumns the file did not have: "
                 f"{', '.join(ingest_report.missing_fields)}")
+
+    html_target = getattr(args, "html", None)
+    if html_target is not None:
+        _write_report(args, report, ingest_report, nets, html_target)
 
     if args.strict and not report.is_complete:
         return EXIT_PROBLEMS

@@ -44,6 +44,8 @@ private/
 data/corpus/
 
 # The generated outreach draft, kept at the root so it is easy to find and
-# edit. Regenerate any time with `python ops.py draft reddit_pcb`; the edited
+# edit. Regenerate with `python ops.py draft reddit_pcb --out reddit_post.md`.
+# Without --out the command only prints, which is how this file went stale for
+# three days while looking current. The edited
 # version is yours and does not belong in the published history.
 reddit_post.md

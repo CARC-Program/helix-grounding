@@ -100,6 +100,25 @@ def test_every_draft_renders_and_is_grounded(key):
 
 
 @pytest.mark.parametrize("key", sorted(drafts.BY_KEY))
+def test_no_draft_contains_an_em_dash(key):
+    """An em dash is the commonest tell that text was machine written.
+
+    This matters here more than as a style preference. Every one of these
+    drafts is posted by a person to a skeptical technical community, and a
+    post that pattern matches as generated gets dismissed before anybody runs
+    the install command. That costs the only thing this project is short of,
+    which is strangers who actually try it.
+
+    Ordinary hyphens in compound words are fine and are not what this checks.
+    """
+    text = drafts.render(key, MEASURED)
+
+    assert "—" not in text, (
+        f"the {key} draft contains an em dash. Rewrite the sentence: use a "
+        f"full stop, a comma, a colon, or two shorter sentences.")
+
+
+@pytest.mark.parametrize("key", sorted(drafts.BY_KEY))
 def test_no_draft_hardcodes_the_version_or_install_command(key):
     """A stored number is a number that goes stale silently."""
     text = drafts.render(key, MEASURED)

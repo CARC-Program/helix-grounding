@@ -1,10 +1,10 @@
 # helix-grounding
 
-**Catch the numbers an AI made up — without asking another AI.**
+**Catch the numbers an AI made up, without asking another AI.**
 
 A language model states a figure that isn't in its source data. In anything
-touching money, specifications, or deadlines, that's not a quality issue —
-it's a liability.
+touching money, specifications, or deadlines, that is not a quality issue.
+It is a liability.
 
 The usual defence is to check the output with another model: LLM-as-judge,
 semantic entailment, embedding similarity. All three are probabilistic, all
@@ -72,8 +72,8 @@ versus `1,234.56` decided per file rather than per cell.
 ### Or hand it the schematic instead
 
 A BOM is a shopping list. It says which parts and how many, and it is silent
-on how any of them connect — so a wiring diagram drawn from one is not hard to
-produce, it is impossible. The data is not in the file. Point it at a KiCad
+on how any of them connect, so a wiring diagram drawn from one is not hard to
+produce. It is impossible. The data is not in the file. Point it at a KiCad
 netlist and that changes:
 
 ```bash
@@ -116,7 +116,7 @@ than passing quietly. Run both files to cover both halves.
 helix-bom diagnose my_bom.csv
 ```
 
-It prints the structure — encoding, delimiter, which line the header was
+It prints the structure: encoding, delimiter, which line the header was
 found on, how each column mapped, and the *shape* of any cell that failed to
 parse (`21 chars, letters`) rather than its contents. Safe to paste into a
 public issue. There is a test that fails if any component data ever reaches
@@ -176,7 +176,7 @@ gets added. It is yours to keep, delete, or share with whoever you choose.
 ### Your BOM never leaves your machine
 
 A bill of materials exposes a design, its costs and its suppliers. Reading
-and reviewing one here is **entirely offline** — no upload, no telemetry, no
+and reviewing one here is **entirely offline**. No upload, no telemetry, no
 account, no network call of any kind.
 
 That is not a promise, it is a test. `tests/test_offline_guarantee.py`
@@ -192,7 +192,7 @@ it defaults to a model running on your own hardware.
 
 ## A real fabrication, caught
 
-Not a demo — a model actually wrote both of these while reviewing a BOM:
+Not a demo. A model actually wrote both of these while reviewing a BOM:
 
 > "the Bosch BME680 at **$3.10** is slightly cheaper than your current part at
 > **$2.40**"
@@ -202,7 +202,7 @@ Not a demo — a model actually wrote both of these while reviewing a BOM:
 The second is caught: $3.20 is the real price, and $3.40 appears nowhere in
 the source data.
 
-**The first passes the check — and should.** Both numbers are real. What's
+**The first passes the check, and should.** Both numbers are real. What's
 false is the word *cheaper*, a claim about the *relation* between two values.
 No value-checker can see that, and a library claiming otherwise would be
 misrepresenting its own scope. It's prevented a different way: the comparison
@@ -222,17 +222,17 @@ Full write-up: `docs/CASE_STUDY.html`.
 ## What it can't do
 
 Stated plainly, because a validation layer that quietly misses a category is
-worse than none — it manufactures false confidence.
+worse than none, because it manufactures false confidence.
 
 - **Judgement claims are out of scope.** Whether advice is good, whether a
   summary is complete, whether a conclusion follows. Those need an
   LLM-as-judge layer. This is not one.
 - **Identifiers need a vocabulary.** No lexical rule separates a part number
-  from a standards name — `RS485` and `BME280` are the same shape. A default
+  from a standards name: `RS485` and `BME280` are the same shape. A default
   vocabulary of known non-identifiers ships in, and is meant to be extended.
 - **Amounts written as words** ("thirty-six dollars") aren't caught. Symbol
   and suffix forms are: `$36`, `36 dollars`, `36 USD`.
-- **Relative dates are out of scope** ("next Tuesday", "in 30 days") — those
+- **Relative dates are out of scope** ("next Tuesday", "in 30 days"). Those
   depend on what *now* means, which makes them judgement claims.
 
 ---
@@ -240,7 +240,7 @@ worse than none — it manufactures false confidence.
 ## Your own data
 
 A domain adapter turns your data into a `GroundTruth`. The core never learns
-what your data is — two ship as reference implementations, and a third is a
+what your data is. Two ship as reference implementations, and a third is a
 new file, not a change to the verifier.
 
 ```python
@@ -252,7 +252,7 @@ report = Verifier().verify(summary, ground_truth_for_invoice(invoice))
 Invoices exercise a shape a BOM never does: a *chain*, where line totals feed
 a subtotal, the subtotal feeds a discount, the remainder feeds a tax. Every
 intermediate is a figure a model will quote, so the adapter permits the whole
-working — not just the answer.
+working, not just the answer.
 
 Adding that second domain is what forced date support into the core. Before
 it, a fabricated due date produced no claim at all and passed straight
@@ -273,16 +273,16 @@ pip install -e ".[dev]"
 pytest
 ```
 
-685 tests, nothing skipped, no database and no services required.
+689 tests, nothing skipped, no database and no services required.
 
 ```
 src/helix_grounding/   the library
-    domains/           bom.py, invoice.py — add a vertical here
+    domains/           bom.py, invoice.py (add a vertical here)
 src/helix_bom/         the worked example: ingest, checks, CLI
 src/helix_llm/         optional model client (local Ollama, or Anthropic)
 CHANGELOG.md           what changed, and whether you need to re-run anything
 docs/                  decision log, architecture, business model, case study
-                       FIRST_USERS.md — how the first users get found
+                       FIRST_USERS.md, how the first users get found
 ```
 
 `docs/DECISION_LOG.md` is 57 decisions with the reasoning attached, including

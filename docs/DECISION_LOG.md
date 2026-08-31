@@ -2132,3 +2132,69 @@ mechanism this project has that does not involve the operator posting again.
 already carries its diagram through `enrich`, so the work is wiring rather than
 design. Printing is the browser's job and no PDF writer belongs here.
 
+## D-057 -- Four views, and the one that will never be drawn
+
+**Decision:** add cost, lead-time, supply-risk and enclosure-fit views to the
+report, cross-highlighted so one part lights up in all of them at once. Do not
+add a board render, and say plainly why there is not one.
+
+**The request was for "3d/2d viewing" of the BOM.** Half of that is available
+and half of it is not, and the split is not a matter of effort. A BOM is a
+shopping list and a netlist is a connectivity list. Neither contains a
+coordinate. Where a part sits on the board lives in the layout file or a
+placement export, so a board render produced from either of these inputs would
+be an invention -- the same category of thing as the category-based interconnect
+sketch that D-041 removed for claiming what usually connects to what.
+
+So the honest 3D is a volume check: real millimetres, packed widest-first,
+against a real envelope, with the drawing itself carrying the sentence
+"position carries no claim". The picture answers *does this add up to something
+that fits*, which is a question the numbers can actually answer.
+
+**The real path to a board view** is reading a pick-and-place export, which
+does carry X, Y and rotation. That is a new reader rather than a rendering
+trick, and it is the honest way to get there.
+
+**Every view refuses rather than draws empty.** A cost treemap of a BOM with no
+prices is a picture of nothing, and an empty frame reads as "no problems" to
+somebody skimming -- this project's recurring failure in yet another costume.
+Each builder returns either a drawing or a sentence naming the column it
+wanted. On the bundled demo three of four render and one says it needs a key,
+which is the correct outcome and is asserted by a test.
+
+**Fit will usually be the one that cannot draw**, and that was known before it
+was built. Standard EDA exports carry footprints, not millimetres -- the demo
+has said so for months in its own skipped-checks list. It was built anyway
+because the operator asked for it and because a BOM that *does* carry
+dimensions gets a real answer; it was not built quietly, which is why this
+paragraph exists.
+
+**A bug found by reading the output rather than the tests.** The packed
+footprint was reported as the envelope width rather than the width actually
+used, so a board using 58 mm of a 60 mm envelope was described as using all 60
+-- and a part overflowing a shelf was counted as fitting. The number is now
+measured. The same class of mistake as D-043: the drawing was well-formed and
+the figure beside it was wrong, and only looking at it caught that.
+
+**Cross-highlighting matches exactly, never by substring.** The placement
+blueprint already carries a comment about this: a substring test outlined the
+wrong part, because "Battery" is inside "Battery Pack 5000mAh". The page
+compares `data-ref` with `===` and a test asserts `.includes(` appears nowhere
+in the script.
+
+**Cost is extended, not unit.** Four capacitors at five cents are twenty cents
+of the board. Costing a BOM at unit price is a mistake this tool exists to
+catch, so its own chart must not make it -- tested directly.
+
+**Cost impact:** none. No charting library and no runtime dependency; every
+view is inline SVG or a table, generated as string work. The report still
+fetches nothing, and the test that walks every loadable element now runs
+against a page with three SVGs in it.
+
+**Future implications:** component photographs from a distributor are the
+obvious next ask and are deliberately not here. `PartRecord` has no image
+field, and embedding remote images would break the guarantee that the page
+loads nothing. Doing it properly means fetching at review time and inlining as
+`data:` URIs behind an explicit flag, which is a real piece of work and a real
+decision rather than an afternoon's addition.
+

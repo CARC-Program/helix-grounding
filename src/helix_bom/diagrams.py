@@ -274,7 +274,8 @@ def _wrap(text: str, width: int) -> list:
 
 
 def generate_netlist_interconnect_svg(links: list, source: str = "",
-                                      max_labelled: int = 14) -> str:
+                                      max_labelled: int = 14,
+                                      interactive: bool = False) -> str:
     """Draw the interconnect a netlist actually specifies.
 
     ``links`` is what ``netlist.interconnect_from_nets`` returns:
@@ -340,9 +341,16 @@ def generate_netlist_interconnect_svg(links: list, source: str = "",
         x1, y1 = positions[ref_a]
         x2, y2 = positions[ref_b]
         thickness = min(1.0 + len(names), 5.0)
+        if interactive:
+            out.append(f'<g class="edge" data-a="{_xml(ref_a)}" '
+                       f'data-b="{_xml(ref_b)}">'
+                       f'<title>{_xml(ref_a)} to {_xml(ref_b)}: '
+                       f'{_xml(", ".join(names))}</title>')
         out.append(f'<line x1="{x1:.1f}" y1="{y1:.1f}" x2="{x2:.1f}" y2="{y2:.1f}" '
                    f'stroke="{EDGE_COLOR}" stroke-width="{thickness:.1f}" '
                    f'stroke-opacity="0.55"/>')
+        if interactive:
+            out.append("</g>")
         if label_edges:
             label = _xml(names[0] + (f"  +{len(names) - 1}" if len(names) > 1 else ""))
             out.append(f'<text x="{(x1 + x2) / 2:.1f}" y="{(y1 + y2) / 2 - 4:.1f}" '
@@ -352,11 +360,15 @@ def generate_netlist_interconnect_svg(links: list, source: str = "",
     for ref in refs:
         x, y = positions[ref]
         width = widths[ref]
+        if interactive:
+            out.append(f'<g class="cell node" data-ref="{_xml(ref)}">')
         out.append(f'<rect x="{x - width / 2:.1f}" y="{y - box_h / 2:.1f}" '
                    f'width="{width:.0f}" height="{box_h}" rx="3" '
                    f'fill="{NODE_FILL}" stroke="#2C6395" stroke-width="1"/>')
         out.append(f'<text x="{x:.1f}" y="{y + 4:.1f}" font-family="sans-serif" '
                    f'font-size="11" fill="white" text-anchor="middle">{_xml(ref)}</text>')
+        if interactive:
+            out.append("</g>")
 
     note = (f"{count} component(s), {len(links)} link(s) drawn."
             + ("" if label_edges else

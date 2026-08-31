@@ -244,3 +244,65 @@ def test_an_unreadable_file_says_so_rather_than_raising(tmp_path):
 
     with pytest.raises(ValueError):
         review(empty)
+
+
+# --------------------------------------------------------------------
+# The drawn views, as they appear in the page
+# --------------------------------------------------------------------
+
+def test_the_report_carries_a_tab_for_every_view():
+    report, ingest = _report()
+
+    html = build_html(report, ingest=ingest, source=Path(FIXTURE))
+
+    for tab in ("cost", "lead", "risk", "fit", "findings", "lines", "file"):
+        assert f'data-tab="{tab}"' in html
+
+
+def test_a_view_that_cannot_be_drawn_says_so_in_the_page():
+    """Not an empty frame. The enrich demo has no dimensions and no key, so
+    two of the four must be visibly absent with a reason attached."""
+    report, ingest = _report()
+
+    html = build_html(report, ingest=ingest, source=Path(FIXTURE))
+
+    assert "Not drawn, and that is not a pass." in html
+    assert "no component dimensions in this file" in html
+    assert "distributor API key" in html
+
+
+def test_the_cost_view_is_drawn_because_the_demo_has_prices():
+    report, ingest = _report()
+
+    html = build_html(report, ingest=ingest, source=Path(FIXTURE))
+
+    assert "Where the money goes" in html
+    assert "Area is extended cost" in html
+
+
+def test_one_part_can_be_lit_up_across_every_view():
+    """Cross-highlighting is the whole reason the views are in one page rather
+    than four files. Every element that represents a part carries the same
+    key, and the match is exact -- a substring test once outlined the wrong
+    component because one name contained another."""
+    report, ingest = _report()
+
+    html = build_html(report, ingest=ingest, source=Path(FIXTURE))
+
+    assert "data-ref=" in html
+    assert "el.dataset.ref === ref" in html          # exact comparison, not includes
+    assert ".includes(" not in html
+
+
+def test_the_views_do_not_break_the_promise_the_page_makes():
+    """Adding pictures must not add a fetch. Same check as the page-level one,
+    run again now that three SVGs are embedded in it."""
+    import re
+
+    report, ingest = _report()
+    html = build_html(report, ingest=ingest, source=Path(FIXTURE))
+
+    for tag in re.findall(r"<(?:script|link|img|iframe|object|embed|image)[^>]*>",
+                          html, re.IGNORECASE):
+        assert "src=" not in tag.lower(), tag
+        assert "href=" not in tag.lower(), tag

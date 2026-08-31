@@ -135,6 +135,29 @@ Severity filters, the full line table, every "not checked" reason, the column
 mapping the parser used, and -- for a netlist -- the interconnect diagram
 embedded in the page.
 
+Four drawn views, each from data the file actually contains:
+
+| View | What it answers | Needs |
+|---|---|---|
+| **Cost** | where the money goes, by extended cost | a price column |
+| **Lead time** | which single part gates the whole build | a lead-time column |
+| **Supply risk** | lifecycle, stock against your quantity, minimum order, price at that quantity | a distributor key |
+| **Fit** | isometric volumes against your enclosure | `--enclosure WxDxH` and mm dimensions |
+
+Hover or click any part and it lights up everywhere at once -- its block in the
+cost treemap, its bar in the lead-time chart, its box in the enclosure, its row
+in the table and the finding that names it.
+
+**A view with no data says so instead of drawing an empty frame.** A blank
+chart reads as "nothing wrong" to somebody skimming, so each one names the
+column it wanted. Standard EDA exports carry footprints rather than
+millimetres, so Fit is usually the one that reports itself unavailable.
+
+**There is no board render, and there will not be one from these files.** A BOM
+has no coordinates and a netlist has no coordinates -- where parts sit lives in
+the layout or a placement file. The enclosure view is a volume check and says
+so on the drawing itself; it is not a placement suggestion.
+
 If you would rather not open a terminal at all:
 
 ```bash
@@ -250,7 +273,7 @@ pip install -e ".[dev]"
 pytest
 ```
 
-662 tests, nothing skipped, no database and no services required.
+685 tests, nothing skipped, no database and no services required.
 
 ```
 src/helix_grounding/   the library
@@ -262,7 +285,7 @@ docs/                  decision log, architecture, business model, case study
                        FIRST_USERS.md — how the first users get found
 ```
 
-`docs/DECISION_LOG.md` is 56 decisions with the reasoning attached, including
+`docs/DECISION_LOG.md` is 57 decisions with the reasoning attached, including
 the bugs that produced the design above. It is the most useful file here for
 understanding *why* rather than *what*.
 

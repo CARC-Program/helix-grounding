@@ -1,5 +1,50 @@
 # Changelog
 
+## 0.4.0 — 2026-08-30
+
+> **The report now draws what the file contains.** Cost, lead time, supply risk
+> and enclosure fit, cross-highlighted so one part lights up in every view at
+> once. Views without data say which column they wanted rather than rendering
+> an empty frame.
+
+### Added
+
+**Cost view.** A treemap of extended cost -- unit price times quantity, because
+four capacitors at five cents are twenty cents of the board. Click a block to
+light that part up everywhere else.
+
+**Lead-time view.** The longest bar is the date the board is ready, however
+available everything else is. That single fact is normally buried in a column
+nobody sorts.
+
+**Supply-risk view.** Lifecycle, stock against the quantity you need, minimum
+order quantity, and what a unit actually costs at that quantity. Needs a
+distributor key, and says so plainly when there is not one.
+
+**Enclosure fit.** Component volumes in isometric against an envelope given as
+`--enclosure WxDxH`, with anything that does not fit in red. It is a volume
+check, not a placement -- the drawing says so itself, because neither a BOM nor
+a netlist knows where a part goes.
+
+**Cross-highlighting.** Hover or click any part to light it up in the treemap,
+the lead-time chart, the enclosure, the line table and the finding that names
+it. Matching is exact: a substring test would outline the wrong component.
+
+**`--enclosure WxDxH` on `enrich`**, using the same parser `review` uses.
+
+### Fixed
+
+**The packed footprint is measured, not assumed.** It was reported as the
+envelope width, so a board using 58 mm of a 60 mm envelope was described as
+using all 60, and a part overflowing a shelf counted as fitting.
+
+### Note
+
+No board render is produced, and none can be from these inputs: a BOM has no
+coordinates and a netlist has no coordinates. Reading a pick-and-place export
+is the honest route to one.
+
+
 ## 0.3.0 — 2026-08-30
 
 > **Reviews can now be read as a page instead of scrollback.** `--html` writes

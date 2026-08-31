@@ -26,6 +26,8 @@ from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
 
+from .charts import cost_view, enclosure_view, lead_time_view, risk_view
+
 SEVERITY_ORDER = {"critical": 0, "warning": 1, "info": 2}
 
 SEVERITY_LABEL = {"critical": "critical", "warning": "warning", "info": "note"}
@@ -244,6 +246,26 @@ h2:first-child { margin-top: 0; }
 .diagram { background: var(--panel); border: 1px solid var(--line);
            border-radius: 8px; padding: 16px; overflow-x: auto; }
 .diagram svg { max-width: 100%; height: auto; display: block; }
+/* Cross-highlighting. One part, lit everywhere it appears at once --
+   the treemap block, the lead-time bar, the box in the enclosure, the row in
+   the table and the finding that names it. Matching is exact: a substring
+   test once outlined the wrong part, because "Battery" is inside
+   "Battery Pack 5000mAh". */
+.cell { cursor: pointer; }
+.cell:hover { filter: brightness(1.12); }
+svg .cell.hit rect, svg .cell.hit polygon { stroke: #111; stroke-width: 2.4; }
+svg .edge.hit line { stroke: #111 !important; stroke-opacity: 1 !important; }
+.dimmed { opacity: 0.22; }
+tr.hit > td { background: var(--info-bg); }
+.finding.hit { box-shadow: 0 0 0 2px var(--accent); }
+.finding { cursor: pointer; }
+table.risk td.bad { color: var(--critical); font-weight: 650; }
+table.risk td.warn { color: var(--warning); font-weight: 650; }
+.viewnote { color: var(--muted); font-size: 13.5px; margin: 0 0 14px; }
+.nodata { background: var(--panel); border: 1px solid var(--line);
+          border-left: 4px solid var(--warning); border-radius: 8px;
+          padding: 14px 16px; font-size: 14px; }
+.nodata b { display: block; margin-bottom: 3px; }
 footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--line);
          color: var(--muted); font-size: 12.5px; }
 footer code { font-size: 12px; }
@@ -262,6 +284,32 @@ SCRIPT = """
   }
   tabs.forEach(function (t) {
     t.addEventListener('click', function () { show(t.dataset.tab); });
+  });
+
+  // Cross-highlighting. Exact match on data-ref only.
+  var pinned = null;
+  function paint(ref) {
+    document.querySelectorAll('[data-ref]').forEach(function (el) {
+      el.classList.toggle('hit', ref !== null && el.dataset.ref === ref);
+    });
+    document.querySelectorAll('.edge').forEach(function (el) {
+      var touches = ref !== null &&
+        (el.dataset.a === ref || el.dataset.b === ref);
+      el.classList.toggle('hit', touches);
+      el.classList.toggle('dimmed', ref !== null && !touches);
+    });
+  }
+  document.querySelectorAll('[data-ref]').forEach(function (el) {
+    el.addEventListener('mouseenter', function () {
+      if (pinned === null) { paint(el.dataset.ref); }
+    });
+    el.addEventListener('mouseleave', function () {
+      if (pinned === null) { paint(null); }
+    });
+    el.addEventListener('click', function () {
+      pinned = (pinned === el.dataset.ref) ? null : el.dataset.ref;
+      paint(pinned);
+    });
   });
 
   var filters = document.querySelectorAll('.filters button');
@@ -308,7 +356,7 @@ def _findings_panel(findings) -> str:
         severity = f.severity if f.severity in SEVERITY_ORDER else "info"
         advice = _advice(f.message)
         rows.append(
-            f'<div class="finding {severity}">'
+            f'<div class="finding {severity}" data-ref="{_esc(f.reference)}">'
             f'<div class="head">'
             f'<span class="tag">{_esc(SEVERITY_LABEL[severity])}</span>'
             f'<span class="ref">{_esc(f.reference)}</span>'
@@ -351,8 +399,11 @@ def _lines_panel(report) -> str:
         component = line.component
         checked = line.was_checked
         outcome = getattr(line.lookup.outcome, "value", "")
+        reference = (_attr(component, "designator")
+                     or _attr(component, "manufacturer_part_number")
+                     or _attr(component, "name"))
         rows.append(
-            "<tr>"
+            f'<tr data-ref="{_esc(reference)}">'
             f'<td class="mono">{_esc(_attr(component, "designator"))}</td>'
             f'<td class="wrap-cell">{_esc(_attr(component, "name"))}</td>'
             f'<td>{_esc(_attr(component, "quantity", 1))}</td>'
@@ -425,8 +476,23 @@ def _file_panel(ingest, source: Path) -> str:
 # The document
 # --------------------------------------------------------------------
 
+def _view_panel(view, heading: str, lead: str) -> str:
+    """A drawing, or the sentence explaining why there is not one.
+
+    Never an empty frame. A blank chart reads as "nothing wrong" to somebody
+    skimming, which is the failure this whole project is arranged against.
+    """
+    if view.available:
+        return (f"<h2>{_esc(heading)}</h2>"
+                f'<p class="viewnote">{_esc(lead)}</p>'
+                f'<div class="diagram">{view.markup}</div>')
+    return (f"<h2>{_esc(heading)}</h2>"
+            f'<div class="nodata"><b>Not drawn, and that is not a pass.</b>'
+            f"{_esc(view.reason)}</div>")
+
+
 def build_html(report, ingest=None, source=None, diagram_svg: str = "",
-               version: str = "") -> str:
+               version: str = "", enclosure=None) -> str:
     """The whole report as one string. No I/O, so it is trivial to test."""
     source = Path(source) if source else Path("bill of materials")
     findings = list(report.findings)
@@ -449,12 +515,40 @@ def build_html(report, ingest=None, source=None, diagram_svg: str = "",
                   "and nothing was found.</strong>Compare the column mapping "
                   "in the <em>File</em> tab against what you expected.</div>")
 
+    components = [line.component for line in report.lines]
+    cost = cost_view(components)
+    lead = lead_time_view(components)
+    risk = risk_view(report)
+    fit = enclosure_view(components, enclosure)
+
     tabs = [("findings", f"Findings ({len(findings)})"),
             ("notchecked", f"Not checked ({not_checked})"),
-            ("lines", f"Lines ({total})")]
-    panels = [("findings", _findings_panel(findings)),
-              ("notchecked", _not_checked_panel(report)),
-              ("lines", _lines_panel(report))]
+            ("cost", "Cost"),
+            ("lead", "Lead time"),
+            ("risk", "Supply risk"),
+            ("fit", "Fit")]
+    panels = [
+        ("findings", _findings_panel(findings)),
+        ("notchecked", _not_checked_panel(report)),
+        ("cost", _view_panel(
+            cost, "Where the money goes",
+            "Area is extended cost -- unit price times quantity. Hover or "
+            "click a block to light that part up in every other view.")),
+        ("lead", _view_panel(
+            lead, "What gates the build",
+            "The longest bar is the date the board is ready, however "
+            "available everything else is.")),
+        ("risk", _view_panel(
+            risk, "Supply risk",
+            "Lifecycle, stock against the quantity you need, minimum order, "
+            "and what a unit actually costs at that quantity.")),
+        ("fit", _view_panel(
+            fit, "Volume, not placement",
+            "Component volumes packed widest-first. Where a box sits carries "
+            "no claim at all -- a netlist and a BOM both have no coordinates. "
+            "The question this answers is whether it adds up to something "
+            "that fits.")),
+    ]
     if diagram_svg:
         tabs.append(("routing", "Routing"))
         panels.append(("routing",
@@ -463,6 +557,8 @@ def build_html(report, ingest=None, source=None, diagram_svg: str = "",
                        "file. Power and ground nets are left out because they "
                        'touch nearly everything.</p>'
                        f'<div class="diagram">{diagram_svg}</div>'))
+    tabs.append(("lines", f"Lines ({total})"))
+    panels.append(("lines", _lines_panel(report)))
     tabs.append(("file", "File"))
     panels.append(("file", _file_panel(ingest, source)))
 
@@ -517,12 +613,14 @@ def build_html(report, ingest=None, source=None, diagram_svg: str = "",
 
 
 def write_html(report, destination, ingest=None, source=None,
-               diagram_svg: str = "", version: str = "") -> Path:
+               diagram_svg: str = "", version: str = "",
+               enclosure=None) -> Path:
     """Write the report and return where it landed."""
     destination = Path(destination)
     destination.write_text(
         build_html(report, ingest=ingest, source=source,
-                   diagram_svg=diagram_svg, version=version),
+                   diagram_svg=diagram_svg, version=version,
+                   enclosure=enclosure),
         encoding="utf-8")
     return destination
 

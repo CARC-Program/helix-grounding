@@ -170,12 +170,14 @@ def _write_report(args, report, ingest_report, nets, target) -> None:
         from .netlist import interconnect_from_nets
         diagram = generate_netlist_interconnect_svg(
             interconnect_from_nets(nets),
-            source=getattr(ingest_report, "source", ""))
+            source=getattr(ingest_report, "source", ""),
+            interactive=True)
 
     destination = Path(target) if target else default_destination(args.file)
     try:
         write_html(report, destination, ingest=ingest_report, source=args.file,
-                   diagram_svg=diagram, version=_version_line())
+                   diagram_svg=diagram, version=_version_line(),
+                   enclosure=getattr(args, "enclosure", None))
     except OSError as exc:
         err(f"could not write {destination}: {exc}")
         return

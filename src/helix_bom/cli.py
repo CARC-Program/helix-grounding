@@ -614,6 +614,10 @@ def build_parser() -> argparse.ArgumentParser:
                             metavar="PATH",
                             help="write a visual report and open it "
                                  "(default: beside the BOM)")
+    enrich_cmd.add_argument("--enclosure", type=_parse_enclosure,
+                            metavar="WxDxH", default=None,
+                            help="enclosure envelope in mm, e.g. 100x80x25 -- "
+                                 "lets the report check volume fit")
     enrich_cmd.add_argument("--no-open", action="store_true",
                             help="write the --html report without opening a "
                                  "browser")

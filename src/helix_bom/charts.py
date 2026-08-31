@@ -36,6 +36,23 @@ PAPER = "#FAFAFA"
 DANGER = "#B4232B"
 WARN = "#B4762B"
 
+# Caps on how much is drawn. Chosen so a real board stays interactive: past
+# these counts a block is smaller than a cursor and the page gets heavy for
+# nothing anybody can see or click.
+COST_BLOCKS = 40
+FIT_BOXES = 120
+
+
+class _Rest:
+    """Stands in for the aggregated tail of a treemap."""
+
+    def __init__(self, count: int):
+        self.count = count
+        self.designator = f"{count} smaller lines"
+        self.name = "everything else, grouped"
+        self.category = ""
+        self.quantity = 1
+
 
 @dataclass(frozen=True)
 class View:
@@ -139,6 +156,17 @@ def cost_view(components) -> View:
     priced.sort(key=lambda pair: -pair[0])
     total = sum(value for value, _ in priced)
 
+    # A block too small to see is a block nobody can click, and five hundred
+    # of them is a slow page for no gain. The tail is aggregated into one
+    # honest block so the areas still sum to the real total.
+    tail = []
+    if len(priced) > COST_BLOCKS:
+        tail = priced[COST_BLOCKS:]
+        priced = priced[:COST_BLOCKS]
+        rest = sum(value for value, _ in tail)
+        if rest > 0:
+            priced.append((rest, _Rest(len(tail))))
+
     width, height = 900.0, 430.0
     top, pad = 54.0, 14.0
     boxes = []
@@ -172,8 +200,11 @@ def cost_view(components) -> View:
                 f'fill-opacity="0.85">${value:,.2f} · {share:.0f}%</text>')
         body.append("</g>")
 
-    note = (f"{len(priced)} priced line(s), ${total:,.2f} total. Area is "
-            f"extended cost: unit price times quantity.")
+    shown = len(priced) - (1 if tail else 0)
+    note = (f"{shown + len(tail)} priced line(s), ${total:,.2f} total. Area is "
+            f"extended cost: unit price times quantity."
+            + (f"  The {len(tail)} smallest are grouped into one block; the "
+               f"areas still sum to the real total." if tail else ""))
     return View(markup=_svg(width, height, "".join(body),
                             title="Where the money goes", note=note))
 
@@ -374,6 +405,12 @@ def enclosure_view(components, enclosure=None) -> View:
     used_d = cursor_y + shelf_d
     tallest = max(h for *_, h in placed)
 
+    # Drawn boxes are capped; the fit verdict below is computed over every
+    # part regardless, because a report that stopped checking at part 120
+    # would call a board that does not fit a board that does.
+    drawn = placed[:FIT_BOXES]
+    omitted_boxes = len(placed) - len(drawn)
+
     scale = min(6.0, max(1.6, 620.0 / max(span + used_d, 1.0)))
     width, height = 900.0, 470.0
     ox, oy = width / 2, 120.0
@@ -386,8 +423,8 @@ def enclosure_view(components, enclosure=None) -> View:
                     .replace('fill-opacity="0.88"', 'fill-opacity="0.16"'))
 
     # Back to front, so nearer boxes overdraw the ones behind them.
-    for component, px, py, w, d, h in sorted(placed,
-                                             key=lambda item: item[1] + item[2]):
+    for component, px, py, w, d, h in sorted(drawn,
+                                            key=lambda item: item[1] + item[2]):
         too_tall = enc_h > 0 and h > enc_h
         too_wide = enc_w > 0 and px + w > enc_w
         too_deep = enc_d > 0 and py + d > enc_d
@@ -410,6 +447,9 @@ def enclosure_view(components, enclosure=None) -> View:
     else:
         note = (f"{len(placed)} part(s) with dimensions, tallest {tallest:g} "
                 f"mm. No envelope given: pass --enclosure WxDxH to check fit.")
+    if omitted_boxes:
+        note += (f"  {omitted_boxes} smaller part(s) are counted in the "
+                 f"verdict but not drawn.")
 
     return View(markup=_svg(width, height, "".join(body),
                             title="Volume, not placement", note=note + "  "

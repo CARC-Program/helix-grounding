@@ -287,17 +287,40 @@ SCRIPT = """
   });
 
   // Cross-highlighting. Exact match on data-ref only.
+  //
+  // Indexed once at load rather than queried per hover. The first version
+  // ran querySelectorAll over every [data-ref] on each mouseenter and toggled
+  // a class on all of them; on a thousand line BOM that is a sweep of ~48,000
+  // elements per mouse move, and it felt like it. Now a hover touches only
+  // the elements leaving the highlight and the ones entering it.
+  var byRef = new Map();
+  var edges = [];
+  document.querySelectorAll('[data-ref]').forEach(function (el) {
+    var key = el.dataset.ref;
+    if (!byRef.has(key)) { byRef.set(key, []); }
+    byRef.get(key).push(el);
+  });
+  document.querySelectorAll('.edge').forEach(function (el) { edges.push(el); });
+
   var pinned = null;
+  var lit = null;
   function paint(ref) {
-    document.querySelectorAll('[data-ref]').forEach(function (el) {
-      el.classList.toggle('hit', ref !== null && el.dataset.ref === ref);
-    });
-    document.querySelectorAll('.edge').forEach(function (el) {
+    if (ref === lit) { return; }
+    if (lit !== null && byRef.has(lit)) {
+      byRef.get(lit).forEach(function (el) { el.classList.remove('hit'); });
+    }
+    if (ref !== null && byRef.has(ref)) {
+      byRef.get(ref).forEach(function (el) { el.classList.add('hit'); });
+    }
+    // Edges are few even on a large board, because a netlist diagram is
+    // capped long before the BOM is.
+    edges.forEach(function (el) {
       var touches = ref !== null &&
         (el.dataset.a === ref || el.dataset.b === ref);
       el.classList.toggle('hit', touches);
       el.classList.toggle('dimmed', ref !== null && !touches);
     });
+    lit = ref;
   }
   document.querySelectorAll('[data-ref]').forEach(function (el) {
     el.addEventListener('mouseenter', function () {

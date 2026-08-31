@@ -2198,3 +2198,67 @@ loads nothing. Doing it properly means fetching at review time and inlining as
 `data:` URIs behind an explicit flag, which is a real piece of work and a real
 decision rather than an afternoon's addition.
 
+## D-058 -- Seven findings on a good file, and all seven wrong
+
+**Decision:** read distributor part numbers as a first-class identifier, derive
+quantity from the designator list when a file states no quantity, and stop the
+designator/quantity check running against a number it derived itself.
+
+**How this was found.** Not by reading the code. The plan was to harden column
+detection against real exports, so the formats this audience actually uses were
+looked up rather than assumed. JLCPCB publishes its BOM requirements: Comment,
+Designator, Footprint and an LCSC part number. A file in that shape was
+constructed and run.
+
+The result was seven findings on a completely valid file, every one of them
+false:
+
+- five CRITICAL `no manufacturer part number`, because no alias matched the
+  LCSC column and the field came through empty;
+- two `designator(s) but a quantity of 1` warnings, because a JLCPCB BOM has
+  no quantity column, the default of 1 was compared against a three or four
+  designator list, and the check duly fired.
+
+It also printed "no distributor can quote them either" about five parts LCSC
+sells from stock. That is not a missed problem, it is the tool asserting
+something false about a good file, which is worse.
+
+**Why it matters more than its size suggests.** JLCPCB is the commonest
+small-run assembly route in exactly the communities `FIRST_USERS.md` names as
+the first three channels. The first stranger to try this with a real file was
+better than even money to be holding one of these. They would have seen a
+hundred percent critical findings on a BOM they had already successfully
+built, and said so in public, and been right.
+
+**The two fixes are different in kind.**
+
+*The missing alias* is an omission. An LCSC code is orderable, so a line
+carrying one is complete. It is still worth one informational line, because
+the code ties the build to a single supplier and does not survive a change of
+assembler. Critical was wrong; silent would also have been wrong.
+
+*The quantity check* is the more interesting failure and the one this project
+keeps producing. The check was not comparing two independent numbers. With no
+quantity column the quantity was a default, so the check compared a designator
+list against a constant and reported the difference as a defect in the file.
+A check must not run against data the file never supplied. The quantity is now
+derived from the designator count, which is how every assembler reads such a
+file and which also makes the cost total right, and `quantity_stated` records
+that it was derived so the comparison stands down. A test holds both sides:
+the check is silent when quantity was derived and still fires when a file
+states 2 against three designators.
+
+**What this says about the checks generally.** Every check should be asked the
+same question: what does it do when the column it depends on is absent? The
+answer has to be "reports itself unrunnable", never "assumes a default and
+judges the file against it".
+
+**Cost impact:** none.
+
+**Future implications:** an LCSC code could be resolved through a supplier that
+carries the mapping, which would turn an informational line into a real
+lifecycle and stock check for the largest group of likely users. Not built.
+Also unaddressed: `distributor_part_number` currently absorbs Digi-Key and
+Mouser codes under the same field, which is fine for the "is this orderable"
+question and wrong if it is ever used to choose where to buy.
+

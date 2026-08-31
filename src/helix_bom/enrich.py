@@ -372,8 +372,11 @@ def enrich(components, distributors, cache=None, compare: bool = False,
         mpn = getattr(component, "manufacturer_part_number", "") or ""
         line = LineResult(component=component,
                           lookup=Lookup(query=mpn, outcome=Outcome.NOT_CHECKED,
-                                        reason=_no_lookup_reason(mpn, usable,
-                                                                 blocked_reasons)))
+                                        reason=_no_lookup_reason(
+                                            mpn, usable, blocked_reasons,
+                                            getattr(component,
+                                                    "distributor_part_number",
+                                                    "") or "")))
         if mpn.strip() and usable:
             line.lookup = _best_lookup(mpn, usable, cache, compare, report)
         _price(line)
@@ -390,8 +393,16 @@ def enrich(components, distributors, cache=None, compare: bool = False,
     return report
 
 
-def _no_lookup_reason(mpn: str, usable, blocked_reasons) -> str:
+def _no_lookup_reason(mpn: str, usable, blocked_reasons,
+                      distributor_pn: str = "") -> str:
     if not mpn.strip():
+        if distributor_pn.strip():
+            # Saying "nothing to look up" here was wrong. There is a code and
+            # it is orderable; it is just not one a manufacturer part number
+            # lookup can resolve.
+            return ("the line carries a distributor code rather than a "
+                    "manufacturer part number, which this lookup cannot "
+                    "resolve")
         return ("the BOM line carries no manufacturer part number "
                 "-- nothing to look up")
     if not usable:

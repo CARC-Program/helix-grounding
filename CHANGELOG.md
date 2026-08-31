@@ -1,5 +1,46 @@
 # Changelog
 
+## 0.4.1 — 2026-08-31
+
+> **A valid JLCPCB assembly BOM produced seven findings and every one was
+> wrong.** It now produces none. Also: the report stays responsive on a real
+> board's BOM instead of sweeping the whole document on every mouse move.
+
+### Fixed
+
+**LCSC and JLCPCB part numbers are recognised.** A JLCPCB assembly BOM carries
+Comment, Designator, Footprint and an LCSC code, and no manufacturer part
+number at all. Every line was reported CRITICAL "no manufacturer part number".
+Such a line is orderable and complete; it now gets one informational note
+saying the code ties the build to a single supplier.
+
+**Quantity is derived from the designators when a file states none.** A JLCPCB
+BOM has no quantity column. The default of 1 was then compared against a four
+designator line and reported as a defect. Quantity now comes from the
+designator count, which is how an assembler reads it and which also makes the
+cost total right, and the designator/quantity check stands down rather than
+comparing a number against the number it came from. It still fires normally
+when a file does state a quantity.
+
+**The report no longer claims nobody can quote a distributor-coded line.** It
+said exactly that about parts LCSC sells from stock.
+
+### Changed
+
+**Cross-highlighting is indexed instead of re-queried.** Every mouse move ran
+`querySelectorAll` over every marked element and toggled a class on all of
+them. On a thousand line BOM that is about 48,000 elements per hover. A hover
+now touches only the elements leaving and entering the highlight.
+
+**The cost and fit views cap what they draw.** Past forty blocks a treemap cell
+is smaller than a cursor. The tail is grouped into one block and the areas
+still sum to the real total. The enclosure verdict is still computed over every
+part, drawn or not, and says how many were left undrawn.
+
+Measured on a 1000 line BOM: 1.3 MB and 47,800 elements before, 719 KB and
+36,900 after, generation 27 ms to 14 ms.
+
+
 ## 0.4.0 — 2026-08-30
 
 > **The report now draws what the file contains.** Cost, lead time, supply risk

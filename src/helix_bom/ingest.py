@@ -27,6 +27,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .agent import Component
+from .structure import expand_designators
 
 # Candidate headers per field, in priority order: the first alias present in
 # the file wins. Order matters — a KiCad export has both "Value" ("10k") and
@@ -47,6 +48,15 @@ COLUMN_ALIASES: dict[str, tuple[str, ...]] = {
                                  "partnumber"),
     "manufacturer": ("manufacturer", "mfr", "mfg", "brand", "vendor",
                      "supplier"),
+    # A distributor's own code. JLCPCB assembly BOMs carry an LCSC number and
+    # no manufacturer part number at all, which is a complete and orderable
+    # file, not a defective one.
+    "distributor_part_number": ("lcscpart", "lcscpartnumber", "lcscpartno",
+                                "lcscpn", "lcsc", "jlcpcbpart",
+                                "jlcpcbpartnumber", "jlcpart",
+                                "supplierpartnumber", "supplierpartno",
+                                "distributorpartnumber", "digikeypartnumber",
+                                "mouserpartnumber"),
     "lead_time_days": ("leadtimedays", "leadtime", "leadtimedy"),
     "category": ("category", "type", "class", "componenttype"),
     "width_mm": ("widthmm", "width"),
@@ -335,6 +345,12 @@ def load_bom(path, max_header_scan: int = 20) -> tuple[list[Component], IngestRe
                     report.ambiguous[report.mapped[field_name]] = AMBIGUOUS_ALIASES[alias]
                 break
 
+    # Whether the file stated quantities at all. A JLCPCB assembly BOM does
+    # not: quantity is implied by the designator list, which is how every
+    # assembler reads it. Deriving it there is correct; comparing the derived
+    # figure back against its own source is not, so the check stands down.
+    quantity_stated = "quantity" in column_index
+
     dnp_index = next((normalised[h] for h in DNP_HEADERS if h in normalised), None)
     dnp_is_inverted = dnp_index is not None and _normalise(header[dnp_index]) == "populate"
 
@@ -343,7 +359,14 @@ def load_bom(path, max_header_scan: int = 20) -> tuple[list[Component], IngestRe
         cell.strip() for index, cell in enumerate(header)
         if cell.strip() and index not in claimed
     ]
-    report.missing_fields = [f for f in COLUMN_ALIASES if f not in column_index]
+    report.missing_fields = [f for f in COLUMN_ALIASES
+                            if f not in column_index]
+    # A distributor code stands in for a manufacturer part number rather
+    # than adding to it. Reporting it as a missing column on a file that
+    # already carries an MPN invents a gap that is not there.
+    if "manufacturer_part_number" in column_index:
+        report.missing_fields = [f for f in report.missing_fields
+                                 if f != "distributor_part_number"]
 
     if "name" not in column_index and "designator" not in column_index:
         raise ValueError(
@@ -427,10 +450,14 @@ def load_bom(path, max_header_scan: int = 20) -> tuple[list[Component], IngestRe
             height_mm=number("height_mm", _parse_money, 0.0),
             power_draw_w=number("power_draw_w", _parse_money, 0.0),
             category=cell("category").lower(),
-            quantity=max(1, number("quantity", _parse_int, 1)),
+            quantity=(max(1, number("quantity", _parse_int, 1))
+                      if quantity_stated
+                      else max(1, len(expand_designators(designator)))),
             manufacturer=cell("manufacturer"),
             manufacturer_part_number=cell("manufacturer_part_number"),
+            distributor_part_number=cell("distributor_part_number"),
             lead_time_days=number("lead_time_days", _parse_int, 0),
+            quantity_stated=quantity_stated,
             designator=designator,
         ))
 

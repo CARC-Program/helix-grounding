@@ -236,8 +236,18 @@ def run_enrich(args, environment=None) -> int:
         err("Run `helix-bom diagnose` on it to see how it was parsed.")
         return EXIT_UNUSABLE
 
-    without_mpn = [c for c in components
-                   if not (c.manufacturer_part_number or "").strip()]
+    # Split deliberately. A line carrying an LCSC code and no manufacturer
+    # part number is orderable, so the sentence about nobody being able to
+    # quote it must not be said about those. It was, on every line of a
+    # valid JLCPCB BOM.
+    def _mpn(component):
+        return (component.manufacturer_part_number or "").strip()
+
+    def _dpn(component):
+        return (getattr(component, "distributor_part_number", "") or "").strip()
+
+    without_any = [c for c in components if not _mpn(c) and not _dpn(c)]
+    distributor_only = [c for c in components if not _mpn(c) and _dpn(c)]
     distributors = _distributors(args, environment)
     cache = None if args.fresh else _cache(args)
 
@@ -247,12 +257,19 @@ def run_enrich(args, environment=None) -> int:
         out(_as_json(report))
     else:
         out(report.describe())
-        if without_mpn:
+        if distributor_only:
+            out(f"\n{len(distributor_only)} of {len(components)} lines are "
+                f"ordered by a distributor code rather than a manufacturer "
+                f"part number.")
+            out("  Those are orderable from that distributor. They cannot be "
+                "cross-referenced elsewhere and they do not survive a change "
+                "of assembler.")
+        if without_any:
             # The commonest reason a BOM cannot be enriched, and the one the
             # archive says people are actually stuck on. Worth its own sentence
             # rather than being buried in the not-checked tally.
-            out(f"\n{len(without_mpn)} of {len(components)} lines carry no "
-                f"manufacturer part number at all.")
+            out(f"\n{len(without_any)} of {len(components)} lines carry no "
+                f"part number of any kind.")
             out("  Nothing can be looked up for those, and no distributor can "
                 "quote them either.")
             out("  This is the gap `enrich` exists for: a value and a footprint "

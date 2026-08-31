@@ -63,6 +63,14 @@ class Component:
     manufacturer: str = ""  # optional, e.g. "Texas Instruments" -- context for synthesis
     manufacturer_part_number: str = ""  # optional, e.g. "TPS61023DRLR"
     lead_time_days: int = 0  # 0 = not specified/in-stock; used by the new supply-chain check below
+    distributor_part_number: str = ""  # e.g. an LCSC code like "C25804".
+    # Orderable, but from one supplier, and it is not a manufacturer part
+    # number: it cannot be cross-referenced at another distributor and it does
+    # not survive a change of assembler.
+    quantity_stated: bool = True  # False when the file carried no quantity
+    # column and the number was taken from the designator count. A check that
+    # compares the two must not run in that case: it would be comparing a
+    # figure against the figure it was derived from.
     designator: str = ""  # e.g. "R1, R2, R3" -- the references this line covers.
     # Read by both file formats and, until 0.2.1, thrown away. It is the only
     # field that says how many physical parts a line represents, which is what

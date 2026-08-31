@@ -290,8 +290,14 @@ def test_one_part_can_be_lit_up_across_every_view():
     html = build_html(report, ingest=ingest, source=Path(FIXTURE))
 
     assert "data-ref=" in html
-    assert "el.dataset.ref === ref" in html          # exact comparison, not includes
+    # Exactness is the property, not any particular line of script. A Map
+    # keyed by the reference matches by equality; a substring search would
+    # not, and once outlined the wrong component because "Battery" is inside
+    # "Battery Pack 5000mAh". These forbid the substring forms outright.
     assert ".includes(" not in html
+    assert ".indexOf(" not in html
+    assert ".startsWith(" not in html
+    assert "byRef" in html                            # the indexed exact lookup
 
 
 def test_the_views_do_not_break_the_promise_the_page_makes():

@@ -129,15 +129,30 @@ def looks_like_a_value(text: str) -> bool:
 def _no_part_number(components) -> list:
     """The commonest thing wrong with a real BOM, and the one the archive
     points straight at. A distributor cannot quote a value and a footprint."""
-    missing = [c for c in components
-               if not (getattr(c, "manufacturer_part_number", "") or "").strip()]
-    if not missing:
-        return []
-    return [Finding("critical", _reference(c),
-                    "no manufacturer part number",
-                    "Nothing can be looked up or ordered for this line. A value "
-                    "and a footprint are not an orderable part.")
-            for c in missing]
+    findings = []
+    for component in components:
+        if (getattr(component, "manufacturer_part_number", "") or "").strip():
+            continue
+        distributor = (getattr(component, "distributor_part_number", "")
+                       or "").strip()
+        if distributor:
+            # A JLCPCB or LCSC line is orderable and complete. Calling it
+            # critical was wrong, and wrong on the commonest assembly
+            # workflow there is. It is still worth one line: the code ties
+            # the build to a single supplier.
+            findings.append(Finding(
+                "info", _reference(component),
+                "ordered by distributor code, not a manufacturer part number",
+                f"{distributor!r} is orderable from that distributor. It "
+                f"cannot be cross-referenced anywhere else, and it does not "
+                f"survive a change of assembler."))
+            continue
+        findings.append(Finding(
+            "critical", _reference(component),
+            "no manufacturer part number",
+            "Nothing can be looked up or ordered for this line. A value "
+            "and a footprint are not an orderable part."))
+    return findings
 
 
 def _value_in_the_part_number(components) -> list:
@@ -223,6 +238,12 @@ def _designators_against_quantity(components) -> list:
     """
     findings = []
     for component in components:
+        if not getattr(component, "quantity_stated", True):
+            # The file carried no quantity column, so the quantity was taken
+            # from the designator count. Comparing them would be comparing a
+            # number against the number it came from, and it would fire on
+            # every multi-designator line of a perfectly good JLCPCB BOM.
+            continue
         refs = expand_designators(getattr(component, "designator", ""))
         if len(refs) < 1:
             continue

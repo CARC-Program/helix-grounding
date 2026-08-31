@@ -71,7 +71,7 @@ def test_the_demo_file_shows_every_check_firing(capsys):
     assert "below the minimum order quantity" in text
     assert "no exact match" in text
     assert "the BOM price is under" in text
-    assert "carry no manufacturer part number" in text
+    assert "carry no part number of any kind" in text
 
 
 def test_offline_output_leads_with_the_warning_that_it_is_invented(capsys):

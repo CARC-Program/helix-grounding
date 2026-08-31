@@ -208,3 +208,58 @@ def test_no_view_reaches_the_network_for_anything():
         assert "<image" not in view.markup
         assert "url(" not in view.markup            # CSS fetch inside a fill
         assert "@import" not in view.markup
+
+
+# --------------------------------------------------------------------
+# Caps, and the checking they must not quietly stop doing
+# --------------------------------------------------------------------
+
+def test_the_cost_treemap_groups_a_long_tail_but_keeps_the_total_honest():
+    """Five hundred blocks smaller than a cursor is a slow page nobody can
+    click. Grouping them is fine; changing the total is not."""
+    from helix_bom.charts import COST_BLOCKS
+
+    parts = ([_part(cost=100.0, designator="BIG")]
+             + [_part(cost=1.0, designator=f"R{n}") for n in range(200)])
+
+    view = cost_view(parts)
+
+    assert view.markup.count('class="cell"') <= COST_BLOCKS + 1
+    assert "$300.00 total" in view.markup            # 100 + 200 x 1
+    assert "201 priced line(s)" in view.markup
+    assert "grouped into one block" in view.markup
+
+
+def test_a_part_beyond_the_drawing_cap_still_fails_the_fit_verdict():
+    """The bug this cap could have introduced, and the reason it did not.
+
+    Only the first FIT_BOXES parts are drawn. If the verdict were computed
+    from the drawn ones, a board would be reported as fitting because the
+    part that does not fit happened to sort past the cap. The verdict is
+    computed over every part, and this proves it: the offending part is
+    narrow, so it sorts last by width, well beyond anything drawn.
+    """
+    from helix_bom.charts import FIT_BOXES
+
+    parts = [_part(w=10, d=1, h=1, designator=f"OK{n}")
+             for n in range(FIT_BOXES + 20)]
+    parts.append(_part(w=0.5, d=0.5, h=99, designator="TOWER"))
+
+    view = enclosure_view(parts, enclosure=(500.0, 500.0, 5.0))
+
+    assert "Something does not fit" in view.markup
+    assert "counted in the verdict but not drawn" in view.markup
+
+
+def test_the_fit_note_says_how_many_were_left_undrawn():
+    """Silence about an omission is the failure mode. If 40 parts are not on
+    the drawing, the drawing has to say so."""
+    from helix_bom.charts import FIT_BOXES
+
+    parts = [_part(w=2, d=2, h=1, designator=f"C{n}")
+             for n in range(FIT_BOXES + 40)]
+
+    view = enclosure_view(parts, enclosure=(400.0, 400.0, 10.0))
+
+    assert "40 smaller part(s) are counted in the verdict but not drawn" \
+        in view.markup
